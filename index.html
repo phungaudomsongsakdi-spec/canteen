@@ -350,567 +350,559 @@
   </div>
 
   <script>
-    (function() {
-      // ============================================================
-      // ตัวแปรและค่าคงที่
-      // ============================================================
-      const deviceTypes = {
-        'หลอดไฟ': '💡', 'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
-        'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹', 'อื่นๆ': '🔧'
-      };
-      const statusColors = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
-      const statusLabels = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
-      const statusEmojis = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
+    // ============================================================
+    // ตัวแปรและค่าคงที่
+    // ============================================================
+    const deviceTypes = {
+      'หลอดไฟ': '💡', 'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
+      'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹', 'อื่นๆ': '🔧'
+    };
+    const statusColors = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
+    const statusLabels = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
+    const statusEmojis = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
 
-      let devices = [];
-      let currentMode = 'view';
-      let currentDeviceId = null;
-      let isCreating = false;
-      let tempCoords = null;
-      let zoomLevel = 1;
-      const MIN_ZOOM = 0.3, MAX_ZOOM = 3;
+    let devices = [];
+    let currentMode = 'view';
+    let currentDeviceId = null;
+    let isCreating = false;
+    let tempCoords = null;
+    let zoomLevel = 1;
+    const MIN_ZOOM = 0.3, MAX_ZOOM = 3;
 
-      // ============================================================
-      // โหลด / บันทึกข้อมูล
-      // ============================================================
-      function loadData() {
-        const saved = localStorage.getItem('electricalLayoutDevices_v6');
-        if (saved) {
-          try { devices = JSON.parse(saved); }
-          catch(e) { devices = []; }
-        } else {
-          devices = [
-            { id: 1, name: 'หลอดไฟ 1', type: 'หลอดไฟ', location: 'ห้องครัว', x: 1000, y: 500, status: 'normal', note: '', size: 18, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
-            { id: 2, name: 'พัดลม 1', type: 'พัดลม', location: 'ห้องประชุม', x: 1800, y: 300, status: 'broken', note: 'พัดลมเสีย', size: 22, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
-            { id: 3, name: 'แอร์ 1', type: 'เครื่องปรับอากาศ', location: 'ห้องประชุม', x: 2200, y: 400, status: 'normal', note: '', size: 24, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
-          ];
-        }
-        loadPlan();
-        render();
-        updateStats();
+    // ============================================================
+    // โหลด / บันทึกข้อมูล
+    // ============================================================
+    function loadData() {
+      const saved = localStorage.getItem('electricalLayoutDevices_v6');
+      if (saved) {
+        try { devices = JSON.parse(saved); }
+        catch(e) { devices = []; }
+      } else {
+        devices = [
+          { id: 1, name: 'หลอดไฟ 1', type: 'หลอดไฟ', location: 'ห้องครัว', x: 1000, y: 500, status: 'normal', note: '', size: 18, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
+          { id: 2, name: 'พัดลม 1', type: 'พัดลม', location: 'ห้องประชุม', x: 1800, y: 300, status: 'broken', note: 'พัดลมเสีย', size: 22, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
+          { id: 3, name: 'แอร์ 1', type: 'เครื่องปรับอากาศ', location: 'ห้องประชุม', x: 2200, y: 400, status: 'normal', note: '', size: 24, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
+        ];
       }
+      loadPlan();
+      render();
+      updateStats();
+    }
 
-      function saveData() {
-        localStorage.setItem('electricalLayoutDevices_v6', JSON.stringify(devices));
-        render();
-        updateStats();
+    function saveData() {
+      localStorage.setItem('electricalLayoutDevices_v6', JSON.stringify(devices));
+      render();
+      updateStats();
+    }
+
+    function resetData() {
+      if (confirm('⚠️ ต้องการลบจุดทั้งหมดและเริ่มใหม่?')) {
+        devices = [];
+        saveData();
+        showUploadStatus('🗑️ รีเซ็ตข้อมูลเรียบร้อย', 'success');
       }
+    }
 
-      window.resetData = function() {
-        if (confirm('⚠️ ต้องการลบจุดทั้งหมดและเริ่มใหม่?')) {
-          devices = [];
-          saveData();
-          showUploadStatus('🗑️ รีเซ็ตข้อมูลเรียบร้อย', 'success');
-        }
-      };
-
-      // ============================================================
-      // รูปแปลน
-      // ============================================================
-      window.uploadPlan = function(event) {
-        const file = event.target.files[0];
-        if (!file) { showUploadStatus('ไม่พบไฟล์', 'error'); return; }
-        if (!file.type.startsWith('image/')) {
-          showUploadStatus('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
-          event.target.value = '';
-          return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          showUploadStatus('ไฟล์ใหญ่เกินไป (จำกัด 10MB)', 'error');
-          event.target.value = '';
-          return;
-        }
-
-        showUploadStatus('⏳ กำลังอัปโหลด...', 'info');
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          try {
-            const dataUrl = e.target.result;
-            const testImg = new Image();
-            testImg.onload = function() {
-              localStorage.setItem('electricalLayoutPlanImage_v6', dataUrl);
-              loadPlan();
-              showUploadStatus('✅ อัปโหลดสำเร็จ! (' + (file.size / 1024).toFixed(1) + ' KB)', 'success');
-            };
-            testImg.onerror = function() {
-              showUploadStatus('❌ ไฟล์รูปภาพเสียหาย', 'error');
-            };
-            testImg.src = dataUrl;
-          } catch (error) {
-            showUploadStatus('❌ อัปโหลดล้มเหลว: ' + error.message, 'error');
-          }
-        };
-        reader.onerror = function() {
-          showUploadStatus('❌ อ่านไฟล์ล้มเหลว', 'error');
-        };
-        reader.readAsDataURL(file);
+    // ============================================================
+    // รูปแปลน
+    // ============================================================
+    function uploadPlan(event) {
+      const file = event.target.files[0];
+      if (!file) { showUploadStatus('ไม่พบไฟล์', 'error'); return; }
+      if (!file.type.startsWith('image/')) {
+        showUploadStatus('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
         event.target.value = '';
-      };
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showUploadStatus('ไฟล์ใหญ่เกินไป (จำกัด 10MB)', 'error');
+        event.target.value = '';
+        return;
+      }
 
-      function loadPlan() {
-        const imgData = localStorage.getItem('electricalLayoutPlanImage_v6');
-        const img = document.getElementById('bg-image');
-        if (imgData && imgData.startsWith('data:image')) {
-          img.setAttribute('href', imgData);
-          img.style.display = 'block';
-          img.onerror = function() {
-            console.error('❌ รูปไม่สามารถแสดงผลได้');
-            showUploadStatus('❌ รูปไม่สามารถแสดงผลได้', 'error');
+      showUploadStatus('⏳ กำลังอัปโหลด...', 'info');
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const dataUrl = e.target.result;
+          const testImg = new Image();
+          testImg.onload = function() {
+            localStorage.setItem('electricalLayoutPlanImage_v6', dataUrl);
+            loadPlan();
+            showUploadStatus('✅ อัปโหลดสำเร็จ! (' + (file.size / 1024).toFixed(1) + ' KB)', 'success');
           };
-        } else {
-          img.removeAttribute('href');
-          img.style.display = 'none';
-        }
-      }
-
-      window.clearPlan = function() {
-        if (confirm('ต้องการลบรูปแปลนพื้นหลัง?')) {
-          localStorage.removeItem('electricalLayoutPlanImage_v6');
-          loadPlan();
-          showUploadStatus('🗑️ ลบรูปแปลนแล้ว', 'success');
+          testImg.onerror = function() {
+            showUploadStatus('❌ ไฟล์รูปภาพเสียหาย', 'error');
+          };
+          testImg.src = dataUrl;
+        } catch (error) {
+          showUploadStatus('❌ อัปโหลดล้มเหลว: ' + error.message, 'error');
         }
       };
+      reader.onerror = function() {
+        showUploadStatus('❌ อ่านไฟล์ล้มเหลว', 'error');
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
 
-      // ============================================================
-      // แสดงสถานะการอัปโหลด
-      // ============================================================
-      function showUploadStatus(message, type) {
-        const status = document.getElementById('uploadStatus');
-        status.textContent = message;
-        status.className = 'upload-status show ' + type;
-        clearTimeout(window.uploadTimeout);
-        window.uploadTimeout = setTimeout(function() {
-          status.classList.remove('show');
-        }, 4000);
+    function loadPlan() {
+      const imgData = localStorage.getItem('electricalLayoutPlanImage_v6');
+      const img = document.getElementById('bg-image');
+      if (imgData && imgData.startsWith('data:image')) {
+        img.setAttribute('href', imgData);
+        img.style.display = 'block';
+        img.onerror = function() {
+          console.error('❌ รูปไม่สามารถแสดงผลได้');
+          showUploadStatus('❌ รูปไม่สามารถแสดงผลได้', 'error');
+        };
+      } else {
+        img.removeAttribute('href');
+        img.style.display = 'none';
       }
+    }
 
-      // ============================================================
-      // เรนเดอร์อุปกรณ์
-      // ============================================================
-      function render() {
-        const layer = document.getElementById('device-layer');
-        layer.innerHTML = '';
-
-        devices.forEach(function(device) {
-          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          g.setAttribute('class', 'device-group');
-          g.setAttribute('data-id', device.id);
-
-          const size = device.size || 18;
-          const offsetX = device.offsetX || 0;
-          const offsetY = device.offsetY || 0;
-          const rotate = device.rotate || 0;
-
-          g.setAttribute('transform', 'translate(' + (device.x + offsetX) + ', ' + (device.y + offsetY) + ') rotate(' + rotate + ')');
-
-          const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          clickArea.setAttribute('r', Math.max(size + 14, 32));
-          clickArea.setAttribute('fill', 'transparent');
-          clickArea.setAttribute('class', 'click-area');
-          clickArea.setAttribute('onclick', 'handleDeviceClick(event, ' + device.id + ')');
-          g.appendChild(clickArea);
-
-          if (device.status === 'broken') {
-            const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            glow.setAttribute('r', size + 10);
-            glow.setAttribute('fill', statusColors.broken);
-            glow.setAttribute('opacity', '0.25');
-            glow.setAttribute('filter', 'url(#glow)');
-            g.appendChild(glow);
-          }
-
-          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('r', size);
-          circle.setAttribute('fill', statusColors[device.status] || '#94a3b8');
-          circle.setAttribute('stroke', '#fff');
-          circle.setAttribute('stroke-width', '3');
-          g.appendChild(circle);
-
-          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          icon.setAttribute('text-anchor', 'middle');
-          icon.setAttribute('dy', size * 0.42);
-          icon.setAttribute('style', 'font-size: ' + (size * 1.15) + 'px;');
-          icon.textContent = deviceTypes[device.type] || '🔧';
-          g.appendChild(icon);
-
-          const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          labelBg.setAttribute('x', size + 10);
-          labelBg.setAttribute('y', '-18');
-          labelBg.setAttribute('width', '180');
-          labelBg.setAttribute('height', '36');
-          labelBg.setAttribute('rx', '8');
-          labelBg.setAttribute('fill', 'rgba(255,255,255,0.94)');
-          labelBg.setAttribute('stroke', '#e2e8f0');
-          labelBg.setAttribute('stroke-width', '1.5');
-          labelBg.setAttribute('class', 'label-bg');
-          g.appendChild(labelBg);
-
-          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          label.setAttribute('x', size + 18);
-          label.setAttribute('y', '6');
-          label.setAttribute('style', 'font-size: 14px; fill: #0f172a; font-weight: 600;');
-          const statusEmoji = statusEmojis[device.status] || '';
-          label.textContent = statusEmoji + ' ' + (device.name || 'อุปกรณ์');
-          g.appendChild(label);
-
-          layer.appendChild(g);
-        });
+    function clearPlan() {
+      if (confirm('ต้องการลบรูปแปลนพื้นหลัง?')) {
+        localStorage.removeItem('electricalLayoutPlanImage_v6');
+        loadPlan();
+        showUploadStatus('🗑️ ลบรูปแปลนแล้ว', 'success');
       }
+    }
 
-      // ============================================================
-      // อัปเดตสถิติ
-      // ============================================================
-      function updateStats() {
-        const counts = { normal: 0, broken: 0, pending: 0, fixed: 0 };
-        devices.forEach(function(d) {
-          if (counts[d.status] !== undefined) counts[d.status]++;
-        });
-        document.getElementById('stat-total').textContent = devices.length;
-        document.getElementById('stat-normal').textContent = counts.normal;
-        document.getElementById('stat-broken').textContent = counts.broken;
-        document.getElementById('stat-pending').textContent = counts.pending;
-        document.getElementById('stat-fixed').textContent = counts.fixed;
-      }
+    // ============================================================
+    // แสดงสถานะการอัปโหลด
+    // ============================================================
+    function showUploadStatus(message, type) {
+      const status = document.getElementById('uploadStatus');
+      status.textContent = message;
+      status.className = 'upload-status show ' + type;
+      clearTimeout(window.uploadTimeout);
+      window.uploadTimeout = setTimeout(() => status.classList.remove('show'), 4000);
+    }
 
-      // ============================================================
-      // โหมด
-      // ============================================================
-      window.setMode = function(mode) {
-        currentMode = mode;
-        document.querySelectorAll('[id^="mode-"]').forEach(function(btn) {
-          var isActive = btn.id === 'mode-' + mode;
-          btn.className = isActive
-            ? 'px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition'
-            : 'px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition';
-        });
+    // ============================================================
+    // เรนเดอร์อุปกรณ์
+    // ============================================================
+    function render() {
+      const layer = document.getElementById('device-layer');
+      layer.innerHTML = '';
 
-        var svg = document.getElementById('floorplan');
-        var container = document.querySelector('.map-container');
-        svg.classList.remove('mode-add', 'mode-delete');
-        container.classList.remove('mode-add', 'mode-delete');
+      devices.forEach(device => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'device-group');
+        g.setAttribute('data-id', device.id);
 
-        var icon = document.getElementById('mode-icon');
-        var text = document.getElementById('mode-text');
-        var bar = document.getElementById('mode-bar').firstElementChild;
+        const size = device.size || 18;
+        const offsetX = device.offsetX || 0;
+        const offsetY = device.offsetY || 0;
+        const rotate = device.rotate || 0;
 
-        if (mode === 'view') {
-          icon.textContent = '👁️';
-          text.textContent = 'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด';
-          bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50';
-        } else if (mode === 'add') {
-          svg.classList.add('mode-add');
-          container.classList.add('mode-add');
-          icon.textContent = '➕';
-          text.textContent = 'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์';
-          bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-emerald-50/80 text-emerald-700 text-sm font-medium border border-emerald-100/50';
-        } else if (mode === 'delete') {
-          svg.classList.add('mode-delete');
-          container.classList.add('mode-delete');
-          icon.textContent = '🗑️';
-          text.textContent = 'โหมดลบจุด: คลิกที่จุดเพื่อลบ';
-          bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-rose-50/80 text-rose-700 text-sm font-medium border border-rose-100/50';
+        g.setAttribute('transform', `translate(${device.x + offsetX}, ${device.y + offsetY}) rotate(${rotate})`);
+
+        const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        clickArea.setAttribute('r', Math.max(size + 14, 32));
+        clickArea.setAttribute('fill', 'transparent');
+        clickArea.setAttribute('class', 'click-area');
+        clickArea.setAttribute('onclick', `handleDeviceClick(event, ${device.id})`);
+        g.appendChild(clickArea);
+
+        if (device.status === 'broken') {
+          const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          glow.setAttribute('r', size + 10);
+          glow.setAttribute('fill', statusColors.broken);
+          glow.setAttribute('opacity', '0.25');
+          glow.setAttribute('filter', 'url(#glow)');
+          g.appendChild(glow);
         }
-      };
 
-      // ============================================================
-      // ซูม
-      // ============================================================
-      function applyZoom() {
-        var svg = document.getElementById('floorplan');
-        svg.style.transform = 'scale(' + zoomLevel + ')';
-        document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
-      }
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('r', size);
+        circle.setAttribute('fill', statusColors[device.status] || '#94a3b8');
+        circle.setAttribute('stroke', '#fff');
+        circle.setAttribute('stroke-width', '3');
+        g.appendChild(circle);
 
-      window.zoomIn = function() {
-        if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1); applyZoom(); }
-      };
-      window.zoomOut = function() {
-        if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1); applyZoom(); }
-      };
-      window.resetZoom = function() { zoomLevel = 1; applyZoom(); };
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        icon.setAttribute('text-anchor', 'middle');
+        icon.setAttribute('dy', size * 0.42);
+        icon.setAttribute('style', `font-size: ${size * 1.15}px;`);
+        icon.textContent = deviceTypes[device.type] || '🔧';
+        g.appendChild(icon);
 
-      // ============================================================
-      // คลิก SVG (เพิ่ม)
-      // ============================================================
-      document.getElementById('floorplan').addEventListener('click', function(e) {
-        if (currentMode !== 'add') return;
-        if (e.target.closest('.device-group')) return;
-        var pt = getSVGPoint(e);
-        tempCoords = { x: Math.round(pt.x), y: Math.round(pt.y) };
-        isCreating = true;
-        openModalCreate();
+        const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        labelBg.setAttribute('x', size + 10);
+        labelBg.setAttribute('y', '-18');
+        labelBg.setAttribute('width', '180');
+        labelBg.setAttribute('height', '36');
+        labelBg.setAttribute('rx', '8');
+        labelBg.setAttribute('fill', 'rgba(255,255,255,0.94)');
+        labelBg.setAttribute('stroke', '#e2e8f0');
+        labelBg.setAttribute('stroke-width', '1.5');
+        labelBg.setAttribute('class', 'label-bg');
+        g.appendChild(labelBg);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', size + 18);
+        label.setAttribute('y', '6');
+        label.setAttribute('style', 'font-size: 14px; fill: #0f172a; font-weight: 600;');
+        const statusEmoji = statusEmojis[device.status] || '';
+        label.textContent = `${statusEmoji} ${device.name || 'อุปกรณ์'}`;
+        g.appendChild(label);
+
+        layer.appendChild(g);
+      });
+    }
+
+    // ============================================================
+    // อัปเดตสถิติ
+    // ============================================================
+    function updateStats() {
+      const counts = { normal: 0, broken: 0, pending: 0, fixed: 0 };
+      devices.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
+      document.getElementById('stat-total').textContent = devices.length;
+      document.getElementById('stat-normal').textContent = counts.normal;
+      document.getElementById('stat-broken').textContent = counts.broken;
+      document.getElementById('stat-pending').textContent = counts.pending;
+      document.getElementById('stat-fixed').textContent = counts.fixed;
+    }
+
+    // ============================================================
+    // โหมด
+    // ============================================================
+    function setMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('[id^="mode-"]').forEach(btn => {
+        const isActive = btn.id === 'mode-' + mode;
+        btn.className = isActive
+          ? 'px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition'
+          : 'px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition';
       });
 
-      function getSVGPoint(event) {
-        var svg = document.getElementById('floorplan');
-        var point = svg.createSVGPoint();
-        point.x = event.clientX;
-        point.y = event.clientY;
-        return point.matrixTransform(svg.getScreenCTM().inverse());
+      const svg = document.getElementById('floorplan');
+      const container = document.querySelector('.map-container');
+      svg.classList.remove('mode-add', 'mode-delete');
+      container.classList.remove('mode-add', 'mode-delete');
+
+      const icon = document.getElementById('mode-icon');
+      const text = document.getElementById('mode-text');
+      const bar = document.getElementById('mode-bar').firstElementChild;
+
+      if (mode === 'view') {
+        icon.textContent = '👁️';
+        text.textContent = 'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด';
+        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50';
+      } else if (mode === 'add') {
+        svg.classList.add('mode-add');
+        container.classList.add('mode-add');
+        icon.textContent = '➕';
+        text.textContent = 'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์';
+        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-emerald-50/80 text-emerald-700 text-sm font-medium border border-emerald-100/50';
+      } else if (mode === 'delete') {
+        svg.classList.add('mode-delete');
+        container.classList.add('mode-delete');
+        icon.textContent = '🗑️';
+        text.textContent = 'โหมดลบจุด: คลิกที่จุดเพื่อลบ';
+        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-rose-50/80 text-rose-700 text-sm font-medium border border-rose-100/50';
       }
+    }
 
-      // ============================================================
-      // คลิกอุปกรณ์
-      // ============================================================
-      window.handleDeviceClick = function(event, id) {
-        event.stopPropagation();
-        if (currentMode === 'delete') {
-          if (confirm('🗑️ ต้องการลบจุดนี้?')) {
-            devices = devices.filter(function(d) { return d.id !== id; });
-            saveData();
-            showUploadStatus('🗑️ ลบอุปกรณ์เรียบร้อย', 'success');
-          }
-        } else {
-          openModalEdit(id);
-        }
-      };
+    // ============================================================
+    // ซูม
+    // ============================================================
+    function applyZoom() {
+      const svg = document.getElementById('floorplan');
+      svg.style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
+    }
 
-      // ============================================================
-      // Modal
-      // ============================================================
-      function openModalCreate() {
-        currentDeviceId = null;
-        isCreating = true;
-        document.getElementById('modal-title').textContent = '➕ เพิ่มอุปกรณ์ใหม่';
-        document.getElementById('modal-name').textContent = 'จุดใหม่';
-        document.getElementById('modal-location').textContent = '📍 พิกัด: ' + tempCoords.x + ', ' + tempCoords.y;
-        document.getElementById('modal-icon').textContent = '💡';
-        document.getElementById('modal-name-input').value = 'อุปกรณ์ ' + (devices.length + 1);
-        document.getElementById('modal-type').value = 'หลอดไฟ';
-        document.getElementById('modal-note').value = '';
-        document.getElementById('modal-updated').textContent = '📍 พิกัด: ' + tempCoords.x + ', ' + tempCoords.y;
-        document.getElementById('delete-area').classList.add('hidden');
+    function zoomIn() {
+      if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1); applyZoom(); }
+    }
+    function zoomOut() {
+      if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1); applyZoom(); }
+    }
+    function resetZoom() { zoomLevel = 1; applyZoom(); }
 
-        document.getElementById('modal-size').value = 18;
-        document.getElementById('modal-offset-x').value = 0;
-        document.getElementById('modal-offset-y').value = 0;
-        document.getElementById('modal-rotate').value = 0;
+    // ============================================================
+    // คลิก SVG (เพิ่ม)
+    // ============================================================
+    document.getElementById('floorplan').addEventListener('click', function(e) {
+      if (currentMode !== 'add') return;
+      if (e.target.closest('.device-group')) return;
+      const pt = getSVGPoint(e);
+      tempCoords = { x: Math.round(pt.x), y: Math.round(pt.y) };
+      isCreating = true;
+      openModalCreate();
+    });
 
-        updateModalStatusButtons('normal');
-        document.getElementById('device-modal').classList.add('active');
-      }
+    function getSVGPoint(event) {
+      const svg = document.getElementById('floorplan');
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(svg.getScreenCTM().inverse());
+    }
 
-      function openModalEdit(id) {
-        var device = devices.find(function(d) { return d.id === id; });
-        if (!device) return;
-
-        currentDeviceId = id;
-        isCreating = false;
-        document.getElementById('modal-title').textContent = '✏️ รายละเอียดอุปกรณ์';
-        document.getElementById('modal-name').textContent = device.name;
-        document.getElementById('modal-location').textContent = '📍 ' + (device.location || '') + ' (' + Math.round(device.x) + ', ' + Math.round(device.y) + ')';
-        document.getElementById('modal-icon').textContent = deviceTypes[device.type] || '🔧';
-        document.getElementById('modal-name-input').value = device.name;
-        document.getElementById('modal-type').value = device.type || 'หลอดไฟ';
-        document.getElementById('modal-note').value = device.note || '';
-        document.getElementById('modal-updated').textContent = '🕐 อัปเดตล่าสุด: ' + (device.updatedAt ? new Date(device.updatedAt).toLocaleString('th-TH') : '-');
-        document.getElementById('delete-area').classList.remove('hidden');
-
-        document.getElementById('modal-size').value = device.size || 18;
-        document.getElementById('modal-offset-x').value = device.offsetX || 0;
-        document.getElementById('modal-offset-y').value = device.offsetY || 0;
-        document.getElementById('modal-rotate').value = device.rotate || 0;
-
-        updateModalStatusButtons(device.status || 'normal');
-        document.getElementById('device-modal').classList.add('active');
-      }
-
-      window.closeModal = function() {
-        document.getElementById('device-modal').classList.remove('active');
-        currentDeviceId = null;
-        tempCoords = null;
-        isCreating = false;
-      };
-
-      window.setStatus = function(status) { updateModalStatusButtons(status); };
-
-      function updateModalStatusButtons(active) {
-        var buttons = ['normal', 'broken', 'pending', 'fixed'];
-        buttons.forEach(function(status) {
-          var btn = document.getElementById('btn-' + status);
-          if (status === active) {
-            btn.className = 'status-btn px-3 py-2.5 rounded-xl border-2 font-medium active-' + status;
-          } else {
-            btn.className = 'status-btn px-3 py-2.5 rounded-xl border-2 font-medium inactive';
-          }
-        });
-        document.getElementById('device-modal').dataset.status = active;
-      }
-
-      // ============================================================
-      // บันทึกอุปกรณ์
-      // ============================================================
-      window.saveDevice = function() {
-        var name = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
-        var type = document.getElementById('modal-type').value;
-        var status = document.getElementById('device-modal').dataset.status || 'normal';
-        var note = document.getElementById('modal-note').value;
-        var size = parseInt(document.getElementById('modal-size').value) || 18;
-        var offsetX = parseInt(document.getElementById('modal-offset-x').value) || 0;
-        var offsetY = parseInt(document.getElementById('modal-offset-y').value) || 0;
-        var rotate = parseInt(document.getElementById('modal-rotate').value) || 0;
-        var now = new Date().toISOString();
-
-        if (isCreating && tempCoords) {
-          var newId = devices.length > 0 ? Math.max.apply(null, devices.map(function(d) { return d.id; })) + 1 : 1;
-          devices.push({
-            id: newId,
-            name: name,
-            type: type,
-            location: 'พิกัด ' + tempCoords.x + ', ' + tempCoords.y,
-            x: tempCoords.x,
-            y: tempCoords.y,
-            status: status,
-            note: note,
-            size: size,
-            offsetX: offsetX,
-            offsetY: offsetY,
-            rotate: rotate,
-            updatedAt: now
-          });
-        } else if (currentDeviceId !== null) {
-          var device = devices.find(function(d) { return d.id === currentDeviceId; });
-          if (device) {
-            device.name = name;
-            device.type = type;
-            device.status = status;
-            device.note = note;
-            device.size = size;
-            device.offsetX = offsetX;
-            device.offsetY = offsetY;
-            device.rotate = rotate;
-            device.updatedAt = now;
-          }
-        }
-
-        saveData();
-        closeModal();
-        showUploadStatus('💾 บันทึกข้อมูลเรียบร้อย', 'success');
-      };
-
-      window.deleteCurrentDevice = function() {
-        if (currentDeviceId === null) return;
+    // ============================================================
+    // คลิกอุปกรณ์
+    // ============================================================
+    function handleDeviceClick(event, id) {
+      event.stopPropagation();
+      if (currentMode === 'delete') {
         if (confirm('🗑️ ต้องการลบจุดนี้?')) {
-          devices = devices.filter(function(d) { return d.id !== currentDeviceId; });
+          devices = devices.filter(d => d.id !== id);
           saveData();
-          closeModal();
           showUploadStatus('🗑️ ลบอุปกรณ์เรียบร้อย', 'success');
         }
-      };
+      } else {
+        openModalEdit(id);
+      }
+    }
 
-      // ============================================================
-      // รายงาน
-      // ============================================================
-      window.showReport = function() {
-        if (devices.length === 0) {
-          alert('⚠️ ยังไม่มีอุปกรณ์ในระบบ');
-          return;
-        }
+    // ============================================================
+    // Modal
+    // ============================================================
+    function openModalCreate() {
+      currentDeviceId = null;
+      isCreating = true;
+      document.getElementById('modal-title').textContent = '➕ เพิ่มอุปกรณ์ใหม่';
+      document.getElementById('modal-name').textContent = 'จุดใหม่';
+      document.getElementById('modal-location').textContent = `📍 พิกัด: ${tempCoords.x}, ${tempCoords.y}`;
+      document.getElementById('modal-icon').textContent = '💡';
+      document.getElementById('modal-name-input').value = `อุปกรณ์ ${devices.length + 1}`;
+      document.getElementById('modal-type').value = 'หลอดไฟ';
+      document.getElementById('modal-note').value = '';
+      document.getElementById('modal-updated').textContent = '📍 พิกัด: ' + tempCoords.x + ', ' + tempCoords.y;
+      document.getElementById('delete-area').classList.add('hidden');
 
-        var html = '';
-        html += '<!DOCTYPE html>';
-        html += '<html>';
-        html += '<head>';
-        html += '<meta charset="UTF-8">';
-        html += '<title>รายงานอุปกรณ์</title>';
-        html += '<style>';
-        html += 'body { font-family: "Prompt", sans-serif; padding: 30px; background: #f8fafc; }';
-        html += '.container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }';
-        html += 'h1 { color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }';
-        html += '.meta { color: #64748b; margin-bottom: 20px; }';
-        html += 'table { width: 100%; border-collapse: collapse; margin-top: 20px; }';
-        html += 'th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; }';
-        html += 'td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }';
-        html += '.status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; }';
-        html += '.badge-normal { background: #d1fae5; color: #065f46; }';
-        html += '.badge-broken { background: #fecdd3; color: #9f1239; }';
-        html += '.badge-pending { background: #fde68a; color: #92400e; }';
-        html += '.badge-fixed { background: #bfdbfe; color: #1e40af; }';
-        html += '.print-btn { padding: 10px 24px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }';
-        html += '.print-btn:hover { background: #4338ca; }';
-        html += '@media print { .no-print { display: none; } body { background: white; padding: 0; } .container { box-shadow: none; } }';
-        html += '</style>';
-        html += '</head>';
-        html += '<body>';
-        html += '<div class="container">';
-        html += '<button onclick="window.print()" class="print-btn no-print">🖨️ พิมพ์รายงาน</button>';
-        html += '<h1>📊 รายงานสรุปอุปกรณ์ไฟฟ้า</h1>';
-        html += '<div class="meta">จำนวนทั้งหมด: ' + devices.length + ' รายการ • วันที่: ' + new Date().toLocaleString('th-TH') + '</div>';
-        html += '<table>';
-        html += '<thead><tr><th>#</th><th>ชื่ออุปกรณ์</th><th>ประเภท</th><th>สถานที่</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead>';
-        html += '<tbody>';
-        for (var i = 0; i < devices.length; i++) {
-          var d = devices[i];
-          html += '<tr>';
-          html += '<td>' + (i + 1) + '</td>';
-          html += '<td>' + d.name + '</td>';
-          html += '<td>' + d.type + '</td>';
-          html += '<td>' + (d.location || '-') + '</td>';
-          html += '<td><span class="status-badge badge-' + d.status + '">' + (statusLabels[d.status] || d.status) + '</span></td>';
-          html += '<td>' + (d.note || '-') + '</td>';
-          html += '</tr>';
-        }
-        html += '</tbody>';
-        html += '</table>';
-        html += '<div style="margin-top: 20px; color: #94a3b8; font-size: 13px;">อัปเดตล่าสุด: ' + new Date().toLocaleString('th-TH') + '</div>';
-        html += '</div>';
-        html += '</body>';
-        html += '</html>';
+      document.getElementById('modal-size').value = 18;
+      document.getElementById('modal-offset-x').value = 0;
+      document.getElementById('modal-offset-y').value = 0;
+      document.getElementById('modal-rotate').value = 0;
 
-        var win = window.open('', '_blank', 'width=900,height=700');
-        win.document.write(html);
-        win.document.close();
-      };
+      updateModalStatusButtons('normal');
+      document.getElementById('device-modal').classList.add('active');
+    }
 
-      // ============================================================
-      // ส่งออก CSV
-      // ============================================================
-      window.exportCSV = function() {
-        if (devices.length === 0) {
-          alert('⚠️ ยังไม่มีข้อมูล');
-          return;
-        }
-        var headers = ['ชื่ออุปกรณ์', 'ประเภท', 'สถานที่', 'สถานะ', 'หมายเหตุ', 'พิกัด X', 'พิกัด Y', 'อัปเดตล่าสุด'];
-        var rows = [];
-        for (var i = 0; i < devices.length; i++) {
-          var d = devices[i];
-          rows.push([
-            d.name, d.type, d.location || '', statusLabels[d.status] || d.status, d.note || '',
-            Math.round(d.x), Math.round(d.y), d.updatedAt ? new Date(d.updatedAt).toLocaleString('th-TH') : ''
-          ]);
-        }
-        var csvContent = headers.join(',') + '\n';
-        for (var j = 0; j < rows.length; j++) {
-          csvContent += rows[j].join(',') + '\n';
-        }
-        var blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        var link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'รายงานอุปกรณ์_' + new Date().toISOString().slice(0,10) + '.csv';
-        link.click();
-        URL.revokeObjectURL(link.href);
-      };
+    function openModalEdit(id) {
+      const device = devices.find(d => d.id === id);
+      if (!device) return;
 
-      // ============================================================
-      // ปิด modal ด้วย ESC / คลิกพื้นหลัง
-      // ============================================================
-      document.getElementById('device-modal').addEventListener('click', function(e) {
-        if (e.target === this) closeModal();
+      currentDeviceId = id;
+      isCreating = false;
+      document.getElementById('modal-title').textContent = '✏️ รายละเอียดอุปกรณ์';
+      document.getElementById('modal-name').textContent = device.name;
+      document.getElementById('modal-location').textContent = `📍 ${device.location || ''} (${Math.round(device.x)}, ${Math.round(device.y)})`;
+      document.getElementById('modal-icon').textContent = deviceTypes[device.type] || '🔧';
+      document.getElementById('modal-name-input').value = device.name;
+      document.getElementById('modal-type').value = device.type || 'หลอดไฟ';
+      document.getElementById('modal-note').value = device.note || '';
+      document.getElementById('modal-updated').textContent = '🕐 อัปเดตล่าสุด: ' + (device.updatedAt ? new Date(device.updatedAt).toLocaleString('th-TH') : '-');
+      document.getElementById('delete-area').classList.remove('hidden');
+
+      document.getElementById('modal-size').value = device.size || 18;
+      document.getElementById('modal-offset-x').value = device.offsetX || 0;
+      document.getElementById('modal-offset-y').value = device.offsetY || 0;
+      document.getElementById('modal-rotate').value = device.rotate || 0;
+
+      updateModalStatusButtons(device.status || 'normal');
+      document.getElementById('device-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('device-modal').classList.remove('active');
+      currentDeviceId = null;
+      tempCoords = null;
+      isCreating = false;
+    }
+
+    function setStatus(status) { updateModalStatusButtons(status); }
+
+    function updateModalStatusButtons(active) {
+      const buttons = ['normal', 'broken', 'pending', 'fixed'];
+      buttons.forEach(status => {
+        const btn = document.getElementById('btn-' + status);
+        if (status === active) {
+          btn.className = `status-btn px-3 py-2.5 rounded-xl border-2 font-medium active-${status}`;
+        } else {
+          btn.className = 'status-btn px-3 py-2.5 rounded-xl border-2 font-medium inactive';
+        }
       });
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeModal();
-      });
+      document.getElementById('device-modal').dataset.status = active;
+    }
 
-      // ============================================================
-      // เริ่มต้นระบบ
-      // ============================================================
-      loadData();
-      applyZoom();
-      setMode('view');
+    // ============================================================
+    // บันทึกอุปกรณ์
+    // ============================================================
+    function saveDevice() {
+      const name = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
+      const type = document.getElementById('modal-type').value;
+      const status = document.getElementById('device-modal').dataset.status || 'normal';
+      const note = document.getElementById('modal-note').value;
+      const size = parseInt(document.getElementById('modal-size').value) || 18;
+      const offsetX = parseInt(document.getElementById('modal-offset-x').value) || 0;
+      const offsetY = parseInt(document.getElementById('modal-offset-y').value) || 0;
+      const rotate = parseInt(document.getElementById('modal-rotate').value) || 0;
+      const now = new Date().toISOString();
 
-      console.log('✅ ระบบโหลดเรียบร้อย!');
-      console.log('📌 อุปกรณ์ทั้งหมด:', devices.length, 'รายการ');
-    })();
+      if (isCreating && tempCoords) {
+        const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
+        devices.push({
+          id: newId,
+          name: name,
+          type: type,
+          location: `พิกัด ${tempCoords.x}, ${tempCoords.y}`,
+          x: tempCoords.x,
+          y: tempCoords.y,
+          status: status,
+          note: note,
+          size: size,
+          offsetX: offsetX,
+          offsetY: offsetY,
+          rotate: rotate,
+          updatedAt: now
+        });
+      } else if (currentDeviceId !== null) {
+        const device = devices.find(d => d.id === currentDeviceId);
+        if (device) {
+          device.name = name;
+          device.type = type;
+          device.status = status;
+          device.note = note;
+          device.size = size;
+          device.offsetX = offsetX;
+          device.offsetY = offsetY;
+          device.rotate = rotate;
+          device.updatedAt = now;
+        }
+      }
+
+      saveData();
+      closeModal();
+      showUploadStatus('💾 บันทึกข้อมูลเรียบร้อย', 'success');
+    }
+
+    function deleteCurrentDevice() {
+      if (currentDeviceId === null) return;
+      if (confirm('🗑️ ต้องการลบจุดนี้?')) {
+        devices = devices.filter(d => d.id !== currentDeviceId);
+        saveData();
+        closeModal();
+        showUploadStatus('🗑️ ลบอุปกรณ์เรียบร้อย', 'success');
+      }
+    }
+
+    // ============================================================
+    // รายงาน (แก้ไขแล้ว - ใช้การต่อสตริงแทน Template String)
+    // ============================================================
+    function showReport() {
+      if (devices.length === 0) {
+        alert('⚠️ ยังไม่มีอุปกรณ์ในระบบ');
+        return;
+      }
+
+      var html = '';
+      html += '<!DOCTYPE html>\n';
+      html += '<html>\n';
+      html += '<head>\n';
+      html += '  <meta charset="UTF-8">\n';
+      html += '  <title>รายงานอุปกรณ์</title>\n';
+      html += '  <style>\n';
+      html += '    body { font-family: "Prompt", sans-serif; padding: 30px; background: #f8fafc; }\n';
+      html += '    .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }\n';
+      html += '    h1 { color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }\n';
+      html += '    .meta { color: #64748b; margin-bottom: 20px; }\n';
+      html += '    table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n';
+      html += '    th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; }\n';
+      html += '    td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }\n';
+      html += '    .status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; }\n';
+      html += '    .badge-normal { background: #d1fae5; color: #065f46; }\n';
+      html += '    .badge-broken { background: #fecdd3; color: #9f1239; }\n';
+      html += '    .badge-pending { background: #fde68a; color: #92400e; }\n';
+      html += '    .badge-fixed { background: #bfdbfe; color: #1e40af; }\n';
+      html += '    .print-btn { padding: 10px 24px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }\n';
+      html += '    .print-btn:hover { background: #4338ca; }\n';
+      html += '    @media print { .no-print { display: none; } body { background: white; padding: 0; } .container { box-shadow: none; } }\n';
+      html += '  </style>\n';
+      html += '</head>\n';
+      html += '<body>\n';
+      html += '  <div class="container">\n';
+      html += '    <button onclick="window.print()" class="print-btn no-print">🖨️ พิมพ์รายงาน</button>\n';
+      html += '    <h1>📊 รายงานสรุปอุปกรณ์ไฟฟ้า</h1>\n';
+      html += '    <div class="meta">จำนวนทั้งหมด: ' + devices.length + ' รายการ • วันที่: ' + new Date().toLocaleString('th-TH') + '</div>\n';
+      html += '    <table>\n';
+      html += '      <thead>\n';
+      html += '        <tr><th>#</th><th>ชื่ออุปกรณ์</th><th>ประเภท</th><th>สถานที่</th><th>สถานะ</th><th>หมายเหตุ</th></tr>\n';
+      html += '      </thead>\n';
+      html += '      <tbody>\n';
+
+      for (var i = 0; i < devices.length; i++) {
+        var d = devices[i];
+        var statusText = statusLabels[d.status] || d.status;
+        html += '        <tr>\n';
+        html += '          <td>' + (i + 1) + '</td>\n';
+        html += '          <td>' + d.name + '</td>\n';
+        html += '          <td>' + d.type + '</td>\n';
+        html += '          <td>' + (d.location || '-') + '</td>\n';
+        html += '          <td><span class="status-badge badge-' + d.status + '">' + statusText + '</span></td>\n';
+        html += '          <td>' + (d.note || '-') + '</td>\n';
+        html += '        </tr>\n';
+      }
+
+      html += '      </tbody>\n';
+      html += '    </table>\n';
+      html += '    <div style="margin-top: 20px; color: #94a3b8; font-size: 13px;">อัปเดตล่าสุด: ' + new Date().toLocaleString('th-TH') + '</div>\n';
+      html += '  </div>\n';
+      html += '</body>\n';
+      html += '</html>';
+
+      var win = window.open('', '_blank', 'width=900,height=700');
+      win.document.write(html);
+      win.document.close();
+    }
+
+    // ============================================================
+    // ส่งออก CSV
+    // ============================================================
+    function exportCSV() {
+      if (devices.length === 0) {
+        alert('⚠️ ยังไม่มีข้อมูล');
+        return;
+      }
+      const headers = ['ชื่ออุปกรณ์', 'ประเภท', 'สถานที่', 'สถานะ', 'หมายเหตุ', 'พิกัด X', 'พิกัด Y', 'อัปเดตล่าสุด'];
+      const rows = devices.map(d => [
+        d.name, d.type, d.location || '', statusLabels[d.status] || d.status, d.note || '',
+        Math.round(d.x), Math.round(d.y), d.updatedAt ? new Date(d.updatedAt).toLocaleString('th-TH') : ''
+      ]);
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `รายงานอุปกรณ์_${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    // ============================================================
+    // ปิด modal ด้วย ESC / คลิกพื้นหลัง
+    // ============================================================
+    document.getElementById('device-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // ============================================================
+    // เริ่มต้นระบบ
+    // ============================================================
+    loadData();
+    applyZoom();
+    setMode('view');
+
+    console.log('✅ ระบบโหลดเรียบร้อย!');
+    console.log('📌 อุปกรณ์ทั้งหมด:', devices.length, 'รายการ');
   </script>
 </body>
 </html>
