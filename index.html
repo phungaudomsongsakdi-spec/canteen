@@ -29,8 +29,11 @@
 
     .mode-add { cursor: crosshair; }
     .mode-delete { cursor: not-allowed; }
-    .mode-add .device-group { cursor: pointer; }
+    .mode-drag { cursor: grab; }
+    .mode-add .device-group { cursor: crosshair; }
     .mode-delete .device-group { cursor: pointer; }
+    .mode-drag .device-group { cursor: grab; }
+    .dragging { cursor: grabbing !important; }
 
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
@@ -149,21 +152,50 @@
       #floorplan { transform: scale(1) !important; }
     }
 
-    .header-btn-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .header-btn-group button,
-    .header-btn-group label {
-      white-space: nowrap;
-    }
+    .header-btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .header-btn-group button, .header-btn-group label { white-space: nowrap; }
     .min-w-900 { min-width: 900px; }
+
+    /* Drag highlight */
+    .device-group.dragging-active circle:first-of-type {
+      stroke: #6366f1;
+      stroke-width: 5;
+    }
+
+    /* Tooltip */
+    .svg-tooltip {
+      position: fixed;
+      background: #1e293b;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 200;
+      display: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    /* Search highlight */
+    .device-group.highlight circle { stroke: #f59e0b; stroke-width: 5; }
+
+    /* Location input */
+    #modal-location-input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-family: 'Prompt', sans-serif;
+    }
+    #modal-location-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
   </style>
 </head>
 <body>
 
   <div id="uploadStatus" class="upload-status"></div>
+  <div id="svgTooltip" class="svg-tooltip"></div>
 
   <header class="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-30 no-print border-b border-slate-200/60">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -174,68 +206,70 @@
         <p class="text-sm text-slate-500">จัดการอุปกรณ์ • ปรับแต่งละเอียด</p>
       </div>
       <div class="flex flex-wrap items-center gap-2 header-btn-group">
+        <!-- โหมด -->
         <div class="flex bg-slate-100 rounded-xl p-1 gap-1 shadow-inner">
           <button onclick="setMode('view')" id="mode-view" class="px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition">👁️ ดู</button>
           <button onclick="setMode('add')" id="mode-add" class="px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition">➕ เพิ่ม</button>
           <button onclick="setMode('delete')" id="mode-delete" class="px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition">➖ ลบ</button>
+          <button onclick="setMode('drag')" id="mode-drag" class="px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition">✋ ย้าย</button>
         </div>
 
+        <!-- ค้นหา -->
+        <div class="relative">
+          <input type="text" id="search-input" placeholder="🔍 ค้นหา..." oninput="searchDevices(this.value)"
+            class="pl-3 pr-8 py-1.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36 transition">
+          <button onclick="clearSearch()" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs">✕</button>
+        </div>
+
+        <!-- รูปแปลน -->
         <label class="px-3 py-1.5 text-sm rounded-xl bg-slate-200 hover:bg-slate-300 transition cursor-pointer flex items-center gap-1.5 shadow-sm">
-          📁 อัปโหลดแปลน
+          📁 แปลน
           <input type="file" id="upload-plan" accept="image/*" class="hidden" onchange="uploadPlan(event)">
         </label>
         <button onclick="clearPlan()" class="px-3 py-1.5 text-sm rounded-xl bg-rose-100 text-rose-700 hover:bg-rose-200 transition shadow-sm">🗑️ ลบรูป</button>
 
+        <!-- ส่งออก -->
         <button onclick="window.print()" class="px-3 py-1.5 text-sm rounded-xl bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition shadow-sm">🖨️ PDF</button>
         <button onclick="showReport()" class="px-3 py-1.5 text-sm rounded-xl bg-purple-100 text-purple-700 hover:bg-purple-200 transition shadow-sm">📊 รายงาน</button>
         <button onclick="exportCSV()" class="px-3 py-1.5 text-sm rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition shadow-sm">📥 CSV</button>
-        <button onclick="resetData()" class="px-3 py-1.5 text-sm rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition shadow-sm">รีเซ็ต</button>
+        <button onclick="exportJSON()" class="px-3 py-1.5 text-sm rounded-xl bg-cyan-100 text-cyan-700 hover:bg-cyan-200 transition shadow-sm">💾 JSON</button>
+        <label class="px-3 py-1.5 text-sm rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 transition cursor-pointer shadow-sm">
+          📂 Import
+          <input type="file" id="import-json" accept=".json" class="hidden" onchange="importJSON(event)">
+        </label>
+        <button onclick="resetData()" class="px-3 py-1.5 text-sm rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition shadow-sm">🔄 รีเซ็ต</button>
       </div>
     </div>
   </header>
 
   <div id="mode-bar" class="max-w-7xl mx-auto px-4 pt-3 no-print">
-    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50 backdrop-blur-sm">
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50 backdrop-filter: blur(8px)">
       <span id="mode-icon">👁️</span>
       <span id="mode-text">โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด</span>
     </div>
   </div>
 
+  <!-- Stats -->
   <div class="max-w-7xl mx-auto px-4 py-3 stats-bar no-print">
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
       <div class="bg-white rounded-xl p-3 shadow-sm border-l-4 border-slate-500 flex justify-between items-center">
-        <div>
-          <div class="text-xl font-bold" id="stat-total">0</div>
-          <div class="text-sm text-slate-500">จุดทั้งหมด</div>
-        </div>
+        <div><div class="text-xl font-bold" id="stat-total">0</div><div class="text-sm text-slate-500">จุดทั้งหมด</div></div>
         <span class="text-2xl opacity-40">📌</span>
       </div>
       <div class="bg-white rounded-xl p-3 shadow-sm border-l-4 border-emerald-500 flex justify-between items-center">
-        <div>
-          <div class="text-xl font-bold" id="stat-normal">0</div>
-          <div class="text-sm text-slate-500">ปกติ</div>
-        </div>
+        <div><div class="text-xl font-bold" id="stat-normal">0</div><div class="text-sm text-slate-500">ปกติ</div></div>
         <span class="text-2xl opacity-40">✅</span>
       </div>
       <div class="bg-white rounded-xl p-3 shadow-sm border-l-4 border-rose-500 flex justify-between items-center">
-        <div>
-          <div class="text-xl font-bold" id="stat-broken">0</div>
-          <div class="text-sm text-slate-500">เสีย</div>
-        </div>
+        <div><div class="text-xl font-bold" id="stat-broken">0</div><div class="text-sm text-slate-500">เสีย</div></div>
         <span class="text-2xl opacity-40">⚠️</span>
       </div>
       <div class="bg-white rounded-xl p-3 shadow-sm border-l-4 border-amber-500 flex justify-between items-center">
-        <div>
-          <div class="text-xl font-bold" id="stat-pending">0</div>
-          <div class="text-sm text-slate-500">รอซ่อม</div>
-        </div>
+        <div><div class="text-xl font-bold" id="stat-pending">0</div><div class="text-sm text-slate-500">รอซ่อม</div></div>
         <span class="text-2xl opacity-40">⏳</span>
       </div>
       <div class="bg-white rounded-xl p-3 shadow-sm border-l-4 border-blue-500 flex justify-between items-center">
-        <div>
-          <div class="text-xl font-bold" id="stat-fixed">0</div>
-          <div class="text-sm text-slate-500">ซ่อมแล้ว</div>
-        </div>
+        <div><div class="text-xl font-bold" id="stat-fixed">0</div><div class="text-sm text-slate-500">ซ่อมแล้ว</div></div>
         <span class="text-2xl opacity-40">🔧</span>
       </div>
     </div>
@@ -252,8 +286,10 @@
             <feGaussianBlur stdDeviation="4" result="blur"/>
             <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
+          <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.2"/>
+          </filter>
         </defs>
-
         <rect x="0" y="0" width="4600" height="2000" fill="url(#grid)" />
         <image id="bg-image" x="0" y="0" width="4600" height="2000" preserveAspectRatio="xMidYMid meet" style="display:none;" />
         <g id="device-layer"></g>
@@ -268,6 +304,7 @@
     </div>
   </main>
 
+  <!-- Modal -->
   <div id="device-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center sticky top-0 z-10 rounded-t-2xl">
@@ -275,6 +312,7 @@
         <button onclick="closeModal()" class="text-white hover:text-indigo-200 text-3xl leading-none">&times;</button>
       </div>
       <div class="p-6 space-y-4">
+
         <div class="flex items-center gap-4 pb-2 border-b border-slate-100">
           <div id="modal-icon" class="text-4xl">💡</div>
           <div>
@@ -283,43 +321,55 @@
           </div>
         </div>
 
+        <!-- ชื่อ -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">ชื่ออุปกรณ์</label>
-          <input type="text" id="modal-name-input" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+          <input type="text" id="modal-name-input" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="ระบุชื่ออุปกรณ์">
         </div>
 
+        <!-- ประเภท -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">ประเภท</label>
-          <select id="modal-type" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+          <select id="modal-type" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" onchange="updateModalIcon()">
             <option value="หลอดไฟ">💡 หลอดไฟ</option>
             <option value="พัดลม">🌀 พัดลม</option>
             <option value="เครื่องปรับอากาศ">❄️ เครื่องปรับอากาศ</option>
             <option value="เต้าเสียบ">🔌 เต้าเสียบ</option>
             <option value="สวิตช์">🔲 สวิตช์</option>
             <option value="กล้องวงจรปิด">📹 กล้องวงจรปิด</option>
+            <option value="เบรกเกอร์">⚡ เบรกเกอร์</option>
+            <option value="สัญญาณเตือนไฟไหม้">🔔 สัญญาณเตือนไฟไหม้</option>
             <option value="อื่นๆ">🔧 อื่นๆ</option>
           </select>
         </div>
 
+        <!-- สถานที่ -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">สถานที่/โซน</label>
+          <input type="text" id="modal-location-input" placeholder="เช่น ห้องประชุม, ชั้น 2, โซน A">
+        </div>
+
+        <!-- ขนาด/หมุน/ปรับ -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1.5">ขนาด (px)</label>
             <input type="number" id="modal-size" value="18" min="10" max="40" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">หมุน (deg)</label>
-            <input type="number" id="modal-rotate" value="0" step="5" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">หมุน (°)</label>
+            <input type="number" id="modal-rotate" value="0" step="45" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">ปรับ X</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">ปรับ X (offset)</label>
             <input type="number" id="modal-offset-x" value="0" step="2" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">ปรับ Y</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">ปรับ Y (offset)</label>
             <input type="number" id="modal-offset-y" value="0" step="2" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
 
+        <!-- สถานะ -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">สถานะ</label>
           <div class="grid grid-cols-2 gap-2">
@@ -330,18 +380,24 @@
           </div>
         </div>
 
+        <!-- หมายเหตุ -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">หมายเหตุ</label>
-          <textarea id="modal-note" rows="2" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="เช่น หลอดไฟกระพริบ, เสียงดัง..."></textarea>
+          <textarea id="modal-note" rows="3" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="เช่น หลอดไฟกระพริบ, เสียงดัง, รายละเอียดการซ่อม..."></textarea>
         </div>
 
-        <div class="text-xs text-slate-400" id="modal-updated">อัปเดตล่าสุด: -</div>
+        <div class="text-xs text-slate-400 flex justify-between" id="modal-updated">
+          <span>อัปเดตล่าสุด: -</span>
+          <span id="modal-coords" class="font-mono"></span>
+        </div>
 
+        <!-- ปุ่มบันทึก -->
         <div class="flex gap-3 pt-2">
           <button onclick="saveDevice()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition shadow-sm">💾 บันทึก</button>
           <button onclick="closeModal()" class="flex-1 bg-slate-200 text-slate-700 py-2.5 rounded-xl font-semibold hover:bg-slate-300 transition">ยกเลิก</button>
         </div>
 
+        <!-- ลบ -->
         <div id="delete-area" class="hidden pt-2 border-t border-slate-100">
           <button onclick="deleteCurrentDevice()" class="w-full bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-xl font-semibold hover:bg-rose-100 transition">🗑️ ลบจุดนี้</button>
         </div>
@@ -355,33 +411,39 @@
     // ============================================================
     const deviceTypes = {
       'หลอดไฟ': '💡', 'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
-      'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹', 'อื่นๆ': '🔧'
+      'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹',
+      'เบรกเกอร์': '⚡', 'สัญญาณเตือนไฟไหม้': '🔔', 'อื่นๆ': '🔧'
     };
-    const statusColors = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
-    const statusLabels = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
-    const statusEmojis = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
+    const statusColors  = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
+    const statusLabels  = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
+    const statusEmojis  = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
 
-    let devices = [];
-    let currentMode = 'view';
+    let devices       = [];
+    let currentMode   = 'view';
     let currentDeviceId = null;
-    let isCreating = false;
-    let tempCoords = null;
-    let zoomLevel = 1;
+    let isCreating    = false;
+    let tempCoords    = null;
+    let zoomLevel     = 1;
     const MIN_ZOOM = 0.3, MAX_ZOOM = 3;
+
+    // Drag state
+    let dragTarget = null, dragOffsetX = 0, dragOffsetY = 0, isDragging = false;
 
     // ============================================================
     // โหลด / บันทึกข้อมูล
     // ============================================================
     function loadData() {
-      const saved = localStorage.getItem('electricalLayoutDevices_v6');
+      const saved = localStorage.getItem('electricalLayoutDevices_v7');
       if (saved) {
-        try { devices = JSON.parse(saved); }
-        catch(e) { devices = []; }
+        try { devices = JSON.parse(saved); } catch(e) { devices = []; }
       } else {
+        // ตัวอย่างข้อมูลเริ่มต้น
         devices = [
-          { id: 1, name: 'หลอดไฟ 1', type: 'หลอดไฟ', location: 'ห้องครัว', x: 1000, y: 500, status: 'normal', note: '', size: 18, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
-          { id: 2, name: 'พัดลม 1', type: 'พัดลม', location: 'ห้องประชุม', x: 1800, y: 300, status: 'broken', note: 'พัดลมเสีย', size: 22, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
-          { id: 3, name: 'แอร์ 1', type: 'เครื่องปรับอากาศ', location: 'ห้องประชุม', x: 2200, y: 400, status: 'normal', note: '', size: 24, offsetX: 0, offsetY: 0, rotate: 0, updatedAt: new Date().toISOString() },
+          { id:1, name:'หลอดไฟ ห้องประชุม', type:'หลอดไฟ',            location:'ห้องประชุม', x:1000, y:500, status:'normal',  note:'',                size:18, offsetX:0, offsetY:0, rotate:0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id:2, name:'พัดลมเพดาน 1',       type:'พัดลม',             location:'ห้องรับรอง', x:1800, y:300, status:'broken',  note:'พัดลมมีเสียงดัง',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id:3, name:'แอร์ห้องประชุม',     type:'เครื่องปรับอากาศ', location:'ห้องประชุม', x:2200, y:400, status:'pending', note:'รอช่างมาตรวจ',     size:24, offsetX:0, offsetY:0, rotate:0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id:4, name:'กล้อง CCTV 1',       type:'กล้องวงจรปิด',      location:'ทางเข้า',    x:600,  y:200, status:'normal',  note:'',                size:20, offsetX:0, offsetY:0, rotate:0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id:5, name:'เบรกเกอร์หลัก',      type:'เบรกเกอร์',         location:'ห้องไฟฟ้า', x:3000, y:800, status:'fixed',   note:'เปลี่ยนใหม่แล้ว',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
       }
       loadPlan();
@@ -390,7 +452,7 @@
     }
 
     function saveData() {
-      localStorage.setItem('electricalLayoutDevices_v6', JSON.stringify(devices));
+      localStorage.setItem('electricalLayoutDevices_v7', JSON.stringify(devices));
       render();
       updateStats();
     }
@@ -408,54 +470,33 @@
     // ============================================================
     function uploadPlan(event) {
       const file = event.target.files[0];
-      if (!file) { showUploadStatus('ไม่พบไฟล์', 'error'); return; }
-      if (!file.type.startsWith('image/')) {
-        showUploadStatus('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
-        event.target.value = '';
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        showUploadStatus('ไฟล์ใหญ่เกินไป (จำกัด 10MB)', 'error');
-        event.target.value = '';
-        return;
-      }
-
-      showUploadStatus('⏳ กำลังอัปโหลด...', 'info');
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { showUploadStatus('❌ กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error'); event.target.value=''; return; }
+      if (file.size > 10 * 1024 * 1024) { showUploadStatus('❌ ไฟล์ใหญ่เกิน 10MB', 'error'); event.target.value=''; return; }
+      showUploadStatus('⏳ กำลังโหลด...', 'info');
       const reader = new FileReader();
       reader.onload = function(e) {
-        try {
-          const dataUrl = e.target.result;
-          const testImg = new Image();
-          testImg.onload = function() {
-            localStorage.setItem('electricalLayoutPlanImage_v6', dataUrl);
-            loadPlan();
-            showUploadStatus('✅ อัปโหลดสำเร็จ! (' + (file.size / 1024).toFixed(1) + ' KB)', 'success');
-          };
-          testImg.onerror = function() {
-            showUploadStatus('❌ ไฟล์รูปภาพเสียหาย', 'error');
-          };
-          testImg.src = dataUrl;
-        } catch (error) {
-          showUploadStatus('❌ อัปโหลดล้มเหลว: ' + error.message, 'error');
-        }
+        const dataUrl = e.target.result;
+        const testImg = new Image();
+        testImg.onload = function() {
+          try { localStorage.setItem('electricalLayoutPlanImage_v7', dataUrl); } catch(e) { showUploadStatus('❌ หน่วยความจำเต็ม (รูปใหญ่เกินไป)', 'error'); return; }
+          loadPlan();
+          showUploadStatus(`✅ อัปโหลดสำเร็จ! (${(file.size/1024).toFixed(1)} KB)`, 'success');
+        };
+        testImg.onerror = () => showUploadStatus('❌ ไฟล์รูปภาพเสียหาย', 'error');
+        testImg.src = dataUrl;
       };
-      reader.onerror = function() {
-        showUploadStatus('❌ อ่านไฟล์ล้มเหลว', 'error');
-      };
+      reader.onerror = () => showUploadStatus('❌ อ่านไฟล์ล้มเหลว', 'error');
       reader.readAsDataURL(file);
       event.target.value = '';
     }
 
     function loadPlan() {
-      const imgData = localStorage.getItem('electricalLayoutPlanImage_v6');
+      const imgData = localStorage.getItem('electricalLayoutPlanImage_v7');
       const img = document.getElementById('bg-image');
       if (imgData && imgData.startsWith('data:image')) {
         img.setAttribute('href', imgData);
         img.style.display = 'block';
-        img.onerror = function() {
-          console.error('❌ รูปไม่สามารถแสดงผลได้');
-          showUploadStatus('❌ รูปไม่สามารถแสดงผลได้', 'error');
-        };
       } else {
         img.removeAttribute('href');
         img.style.display = 'none';
@@ -464,14 +505,14 @@
 
     function clearPlan() {
       if (confirm('ต้องการลบรูปแปลนพื้นหลัง?')) {
-        localStorage.removeItem('electricalLayoutPlanImage_v6');
+        localStorage.removeItem('electricalLayoutPlanImage_v7');
         loadPlan();
         showUploadStatus('🗑️ ลบรูปแปลนแล้ว', 'success');
       }
     }
 
     // ============================================================
-    // แสดงสถานะการอัปโหลด
+    // แสดง Toast
     // ============================================================
     function showUploadStatus(message, type) {
       const status = document.getElementById('uploadStatus');
@@ -482,31 +523,34 @@
     }
 
     // ============================================================
-    // เรนเดอร์อุปกรณ์
+    // เรนเดอร์
     // ============================================================
     function render() {
       const layer = document.getElementById('device-layer');
       layer.innerHTML = '';
-
       devices.forEach(device => {
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('class', 'device-group');
         g.setAttribute('data-id', device.id);
 
-        const size = device.size || 18;
+        const size    = device.size    || 18;
         const offsetX = device.offsetX || 0;
         const offsetY = device.offsetY || 0;
-        const rotate = device.rotate || 0;
+        const rotate  = device.rotate  || 0;
 
         g.setAttribute('transform', `translate(${device.x + offsetX}, ${device.y + offsetY}) rotate(${rotate})`);
 
+        // Click area
         const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         clickArea.setAttribute('r', Math.max(size + 14, 32));
         clickArea.setAttribute('fill', 'transparent');
         clickArea.setAttribute('class', 'click-area');
         clickArea.setAttribute('onclick', `handleDeviceClick(event, ${device.id})`);
+        clickArea.setAttribute('onmouseenter', `showTooltip(event, ${device.id})`);
+        clickArea.setAttribute('onmouseleave', 'hideTooltip()');
         g.appendChild(clickArea);
 
+        // Broken glow
         if (device.status === 'broken') {
           const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           glow.setAttribute('r', size + 10);
@@ -516,13 +560,16 @@
           g.appendChild(glow);
         }
 
+        // Main circle
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('r', size);
         circle.setAttribute('fill', statusColors[device.status] || '#94a3b8');
         circle.setAttribute('stroke', '#fff');
         circle.setAttribute('stroke-width', '3');
+        circle.setAttribute('filter', 'url(#shadow)');
         g.appendChild(circle);
 
+        // Icon
         const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         icon.setAttribute('text-anchor', 'middle');
         icon.setAttribute('dy', size * 0.42);
@@ -530,102 +577,156 @@
         icon.textContent = deviceTypes[device.type] || '🔧';
         g.appendChild(icon);
 
+        // Label background
         const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        labelBg.setAttribute('x', size + 10);
+        const labelText = `${statusEmojis[device.status] || ''} ${device.name || 'อุปกรณ์'}`;
+        const labelWidth = Math.max(labelText.length * 12, 120);
+        labelBg.setAttribute('x', size + 8);
         labelBg.setAttribute('y', '-18');
-        labelBg.setAttribute('width', '180');
+        labelBg.setAttribute('width', labelWidth);
         labelBg.setAttribute('height', '36');
         labelBg.setAttribute('rx', '8');
-        labelBg.setAttribute('fill', 'rgba(255,255,255,0.94)');
-        labelBg.setAttribute('stroke', '#e2e8f0');
+        labelBg.setAttribute('fill', 'rgba(255,255,255,0.95)');
+        labelBg.setAttribute('stroke', statusColors[device.status] || '#e2e8f0');
         labelBg.setAttribute('stroke-width', '1.5');
         labelBg.setAttribute('class', 'label-bg');
         g.appendChild(labelBg);
 
+        // Label text (name)
         const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        label.setAttribute('x', size + 18);
-        label.setAttribute('y', '6');
-        label.setAttribute('style', 'font-size: 14px; fill: #0f172a; font-weight: 600;');
-        const statusEmoji = statusEmojis[device.status] || '';
-        label.textContent = `${statusEmoji} ${device.name || 'อุปกรณ์'}`;
+        label.setAttribute('x', size + 16);
+        label.setAttribute('y', '1');
+        label.setAttribute('style', 'font-size: 13px; fill: #0f172a; font-weight: 600;');
+        label.textContent = labelText;
         g.appendChild(label);
+
+        // Sub-label (location)
+        if (device.location) {
+          const sublabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          sublabel.setAttribute('x', size + 16);
+          sublabel.setAttribute('y', '16');
+          sublabel.setAttribute('style', 'font-size: 11px; fill: #64748b;');
+          sublabel.textContent = device.location;
+          g.appendChild(sublabel);
+        }
 
         layer.appendChild(g);
       });
     }
 
     // ============================================================
-    // อัปเดตสถิติ
+    // Tooltip
+    // ============================================================
+    function showTooltip(event, id) {
+      const device = devices.find(d => d.id === id);
+      if (!device) return;
+      const tip = document.getElementById('svgTooltip');
+      tip.innerHTML = `<strong>${deviceTypes[device.type] || '🔧'} ${device.name}</strong><br>${device.location || ''}  ${statusEmojis[device.status]} ${statusLabels[device.status]}${device.note ? '<br>📝 ' + device.note : ''}`;
+      tip.style.display = 'block';
+      tip.style.left = (event.clientX + 14) + 'px';
+      tip.style.top  = (event.clientY - 10) + 'px';
+    }
+    function hideTooltip() { document.getElementById('svgTooltip').style.display = 'none'; }
+    document.addEventListener('mousemove', e => {
+      const tip = document.getElementById('svgTooltip');
+      if (tip.style.display === 'block') { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY - 10) + 'px'; }
+    });
+
+    // ============================================================
+    // สถิติ
     // ============================================================
     function updateStats() {
       const counts = { normal: 0, broken: 0, pending: 0, fixed: 0 };
       devices.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
-      document.getElementById('stat-total').textContent = devices.length;
-      document.getElementById('stat-normal').textContent = counts.normal;
-      document.getElementById('stat-broken').textContent = counts.broken;
+      document.getElementById('stat-total').textContent   = devices.length;
+      document.getElementById('stat-normal').textContent  = counts.normal;
+      document.getElementById('stat-broken').textContent  = counts.broken;
       document.getElementById('stat-pending').textContent = counts.pending;
-      document.getElementById('stat-fixed').textContent = counts.fixed;
+      document.getElementById('stat-fixed').textContent   = counts.fixed;
     }
+
+    // ============================================================
+    // ค้นหา
+    // ============================================================
+    function searchDevices(query) {
+      const q = query.trim().toLowerCase();
+      document.querySelectorAll('.device-group').forEach(g => {
+        const id = parseInt(g.getAttribute('data-id'));
+        const d = devices.find(x => x.id === id);
+        if (!d) return;
+        const match = !q || d.name.toLowerCase().includes(q) || (d.location||'').toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
+        g.classList.toggle('highlight', !!(q && match));
+        g.style.opacity = (!q || match) ? '1' : '0.25';
+      });
+    }
+    function clearSearch() { document.getElementById('search-input').value = ''; searchDevices(''); }
 
     // ============================================================
     // โหมด
     // ============================================================
     function setMode(mode) {
       currentMode = mode;
-      document.querySelectorAll('[id^="mode-"]').forEach(btn => {
-        const isActive = btn.id === 'mode-' + mode;
-        btn.className = isActive
+      const modeIds = ['view','add','delete','drag'];
+      modeIds.forEach(m => {
+        const btn = document.getElementById('mode-' + m);
+        if (!btn) return;
+        btn.className = (m === mode)
           ? 'px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition'
           : 'px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition';
       });
 
       const svg = document.getElementById('floorplan');
-      const container = document.querySelector('.map-container');
-      svg.classList.remove('mode-add', 'mode-delete');
-      container.classList.remove('mode-add', 'mode-delete');
+      svg.classList.remove('mode-add','mode-delete','mode-drag');
 
       const icon = document.getElementById('mode-icon');
       const text = document.getElementById('mode-text');
-      const bar = document.getElementById('mode-bar').firstElementChild;
+      const bar  = document.getElementById('mode-bar').firstElementChild;
 
-      if (mode === 'view') {
-        icon.textContent = '👁️';
-        text.textContent = 'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด';
-        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50';
-      } else if (mode === 'add') {
-        svg.classList.add('mode-add');
-        container.classList.add('mode-add');
-        icon.textContent = '➕';
-        text.textContent = 'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์';
-        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-emerald-50/80 text-emerald-700 text-sm font-medium border border-emerald-100/50';
-      } else if (mode === 'delete') {
-        svg.classList.add('mode-delete');
-        container.classList.add('mode-delete');
-        icon.textContent = '🗑️';
-        text.textContent = 'โหมดลบจุด: คลิกที่จุดเพื่อลบ';
-        bar.className = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-rose-50/80 text-rose-700 text-sm font-medium border border-rose-100/50';
-      }
+      const configs = {
+        view:   { icon:'👁️', text:'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด', cls:'bg-indigo-50/80 text-indigo-700 border-indigo-100/50' },
+        add:    { icon:'➕', text:'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์', cls:'bg-emerald-50/80 text-emerald-700 border-emerald-100/50' },
+        delete: { icon:'🗑️', text:'โหมดลบจุด: คลิกที่จุดเพื่อลบ (ไม่ต้องยืนยัน)', cls:'bg-rose-50/80 text-rose-700 border-rose-100/50' },
+        drag:   { icon:'✋', text:'โหมดย้ายจุด: ลากจุดเพื่อเปลี่ยนตำแหน่ง', cls:'bg-amber-50/80 text-amber-700 border-amber-100/50' },
+      };
+      const cfg = configs[mode] || configs.view;
+      icon.textContent = cfg.icon;
+      text.textContent = cfg.text;
+      bar.className = `inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-medium border ${cfg.cls}`;
+      if (mode !== 'view') svg.classList.add('mode-' + mode);
     }
 
     // ============================================================
     // ซูม
     // ============================================================
     function applyZoom() {
-      const svg = document.getElementById('floorplan');
-      svg.style.transform = `scale(${zoomLevel})`;
+      document.getElementById('floorplan').style.transform = `scale(${zoomLevel})`;
       document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
     }
-
-    function zoomIn() {
-      if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1); applyZoom(); }
-    }
-    function zoomOut() {
-      if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1); applyZoom(); }
-    }
+    function zoomIn()    { if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1); applyZoom(); } }
+    function zoomOut()   { if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1); applyZoom(); } }
     function resetZoom() { zoomLevel = 1; applyZoom(); }
 
+    // Mousewheel zoom
+    document.getElementById('mapContainer').addEventListener('wheel', function(e) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) zoomIn(); else zoomOut();
+      }
+    }, { passive: false });
+
     // ============================================================
-    // คลิก SVG (เพิ่ม)
+    // SVG Point
+    // ============================================================
+    function getSVGPoint(event) {
+      const svg = document.getElementById('floorplan');
+      const pt  = svg.createSVGPoint();
+      pt.x = event.clientX;
+      pt.y = event.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    // ============================================================
+    // คลิก SVG (เพิ่มจุด)
     // ============================================================
     document.getElementById('floorplan').addEventListener('click', function(e) {
       if (currentMode !== 'add') return;
@@ -636,28 +737,73 @@
       openModalCreate();
     });
 
-    function getSVGPoint(event) {
-      const svg = document.getElementById('floorplan');
-      const point = svg.createSVGPoint();
-      point.x = event.clientX;
-      point.y = event.clientY;
-      return point.matrixTransform(svg.getScreenCTM().inverse());
-    }
+    // ============================================================
+    // DRAG - ย้ายจุด
+    // ============================================================
+    document.getElementById('floorplan').addEventListener('mousedown', function(e) {
+      if (currentMode !== 'drag') return;
+      const grp = e.target.closest('.device-group');
+      if (!grp) return;
+      e.preventDefault();
+      dragTarget = parseInt(grp.getAttribute('data-id'));
+      const pt   = getSVGPoint(e);
+      const dev  = devices.find(d => d.id === dragTarget);
+      if (!dev) return;
+      dragOffsetX = pt.x - (dev.x + (dev.offsetX||0));
+      dragOffsetY = pt.y - (dev.y + (dev.offsetY||0));
+      isDragging  = true;
+      grp.classList.add('dragging-active');
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging || dragTarget === null) return;
+      const pt  = getSVGPoint(e);
+      const dev = devices.find(d => d.id === dragTarget);
+      if (!dev) return;
+      dev.x = Math.round(pt.x - dragOffsetX - (dev.offsetX||0));
+      dev.y = Math.round(pt.y - dragOffsetY - (dev.offsetY||0));
+      const grp = document.querySelector(`.device-group[data-id="${dragTarget}"]`);
+      if (grp) grp.setAttribute('transform', `translate(${dev.x + (dev.offsetX||0)}, ${dev.y + (dev.offsetY||0)}) rotate(${dev.rotate||0})`);
+    });
+    document.addEventListener('mouseup', function() {
+      if (!isDragging) return;
+      isDragging = false;
+      document.querySelectorAll('.device-group.dragging-active').forEach(g => g.classList.remove('dragging-active'));
+      document.body.style.userSelect = '';
+      if (dragTarget !== null) {
+        const dev = devices.find(d => d.id === dragTarget);
+        if (dev) dev.updatedAt = new Date().toISOString();
+        saveData();
+        dragTarget = null;
+        showUploadStatus('📌 ย้ายอุปกรณ์เรียบร้อย', 'success');
+      }
+    });
 
     // ============================================================
     // คลิกอุปกรณ์
     // ============================================================
     function handleDeviceClick(event, id) {
       event.stopPropagation();
+      if (currentMode === 'drag') return; // ป้องกัน modal เปิดตอน drag
       if (currentMode === 'delete') {
-        if (confirm('🗑️ ต้องการลบจุดนี้?')) {
-          devices = devices.filter(d => d.id !== id);
-          saveData();
-          showUploadStatus('🗑️ ลบอุปกรณ์เรียบร้อย', 'success');
+        // ลบทันทีโดยไม่ต้องยืนยัน (เพิ่มความเร็ว - กด Ctrl เพื่อยืนยัน)
+        if (event.ctrlKey) {
+          if (!confirm('🗑️ ยืนยันลบจุดนี้?')) return;
         }
+        devices = devices.filter(d => d.id !== id);
+        saveData();
+        showUploadStatus('🗑️ ลบอุปกรณ์แล้ว', 'success');
       } else {
         openModalEdit(id);
       }
+    }
+
+    // ============================================================
+    // อัปเดต icon ตามประเภทใน modal
+    // ============================================================
+    function updateModalIcon() {
+      const type = document.getElementById('modal-type').value;
+      document.getElementById('modal-icon').textContent = deviceTypes[type] || '🔧';
     }
 
     // ============================================================
@@ -667,45 +813,46 @@
       currentDeviceId = null;
       isCreating = true;
       document.getElementById('modal-title').textContent = '➕ เพิ่มอุปกรณ์ใหม่';
-      document.getElementById('modal-name').textContent = 'จุดใหม่';
+      document.getElementById('modal-name').textContent  = 'จุดใหม่';
       document.getElementById('modal-location').textContent = `📍 พิกัด: ${tempCoords.x}, ${tempCoords.y}`;
-      document.getElementById('modal-icon').textContent = '💡';
-      document.getElementById('modal-name-input').value = `อุปกรณ์ ${devices.length + 1}`;
-      document.getElementById('modal-type').value = 'หลอดไฟ';
-      document.getElementById('modal-note').value = '';
-      document.getElementById('modal-updated').textContent = '📍 พิกัด: ' + tempCoords.x + ', ' + tempCoords.y;
-      document.getElementById('delete-area').classList.add('hidden');
-
-      document.getElementById('modal-size').value = 18;
+      document.getElementById('modal-icon').textContent  = '💡';
+      document.getElementById('modal-name-input').value  = `อุปกรณ์ ${devices.length + 1}`;
+      document.getElementById('modal-type').value        = 'หลอดไฟ';
+      document.getElementById('modal-location-input').value = '';
+      document.getElementById('modal-note').value        = '';
+      document.getElementById('modal-updated').firstElementChild.textContent = 'สร้างใหม่';
+      document.getElementById('modal-coords').textContent = `X:${tempCoords.x} Y:${tempCoords.y}`;
+      document.getElementById('modal-size').value    = 18;
       document.getElementById('modal-offset-x').value = 0;
       document.getElementById('modal-offset-y').value = 0;
-      document.getElementById('modal-rotate').value = 0;
-
+      document.getElementById('modal-rotate').value   = 0;
+      document.getElementById('delete-area').classList.add('hidden');
       updateModalStatusButtons('normal');
       document.getElementById('device-modal').classList.add('active');
+      setTimeout(() => document.getElementById('modal-name-input').select(), 100);
     }
 
     function openModalEdit(id) {
       const device = devices.find(d => d.id === id);
       if (!device) return;
-
       currentDeviceId = id;
       isCreating = false;
-      document.getElementById('modal-title').textContent = '✏️ รายละเอียดอุปกรณ์';
-      document.getElementById('modal-name').textContent = device.name;
+      document.getElementById('modal-title').textContent   = '✏️ แก้ไขอุปกรณ์';
+      document.getElementById('modal-name').textContent    = device.name;
       document.getElementById('modal-location').textContent = `📍 ${device.location || ''} (${Math.round(device.x)}, ${Math.round(device.y)})`;
-      document.getElementById('modal-icon').textContent = deviceTypes[device.type] || '🔧';
-      document.getElementById('modal-name-input').value = device.name;
-      document.getElementById('modal-type').value = device.type || 'หลอดไฟ';
-      document.getElementById('modal-note').value = device.note || '';
-      document.getElementById('modal-updated').textContent = '🕐 อัปเดตล่าสุด: ' + (device.updatedAt ? new Date(device.updatedAt).toLocaleString('th-TH') : '-');
-      document.getElementById('delete-area').classList.remove('hidden');
-
-      document.getElementById('modal-size').value = device.size || 18;
+      document.getElementById('modal-icon').textContent    = deviceTypes[device.type] || '🔧';
+      document.getElementById('modal-name-input').value    = device.name;
+      document.getElementById('modal-type').value          = device.type || 'หลอดไฟ';
+      document.getElementById('modal-location-input').value = device.location || '';
+      document.getElementById('modal-note').value          = device.note || '';
+      document.getElementById('modal-coords').textContent  = `X:${Math.round(device.x)} Y:${Math.round(device.y)}`;
+      const updEl = document.getElementById('modal-updated').firstElementChild;
+      updEl.textContent = '🕐 อัปเดต: ' + (device.updatedAt ? new Date(device.updatedAt).toLocaleString('th-TH') : '-');
+      document.getElementById('modal-size').value     = device.size || 18;
       document.getElementById('modal-offset-x').value = device.offsetX || 0;
       document.getElementById('modal-offset-y').value = device.offsetY || 0;
-      document.getElementById('modal-rotate').value = device.rotate || 0;
-
+      document.getElementById('modal-rotate').value   = device.rotate || 0;
+      document.getElementById('delete-area').classList.remove('hidden');
       updateModalStatusButtons(device.status || 'normal');
       document.getElementById('device-modal').classList.add('active');
     }
@@ -713,68 +860,44 @@
     function closeModal() {
       document.getElementById('device-modal').classList.remove('active');
       currentDeviceId = null;
-      tempCoords = null;
-      isCreating = false;
+      tempCoords  = null;
+      isCreating  = false;
     }
 
     function setStatus(status) { updateModalStatusButtons(status); }
 
     function updateModalStatusButtons(active) {
-      const buttons = ['normal', 'broken', 'pending', 'fixed'];
-      buttons.forEach(status => {
+      ['normal','broken','pending','fixed'].forEach(status => {
         const btn = document.getElementById('btn-' + status);
-        if (status === active) {
-          btn.className = `status-btn px-3 py-2.5 rounded-xl border-2 font-medium active-${status}`;
-        } else {
-          btn.className = 'status-btn px-3 py-2.5 rounded-xl border-2 font-medium inactive';
-        }
+        btn.className = `status-btn px-3 py-2.5 rounded-xl border-2 font-medium ${status === active ? 'active-' + status : 'inactive'}`;
       });
       document.getElementById('device-modal').dataset.status = active;
     }
 
     // ============================================================
-    // บันทึกอุปกรณ์
+    // บันทึก
     // ============================================================
     function saveDevice() {
-      const name = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
-      const type = document.getElementById('modal-type').value;
-      const status = document.getElementById('device-modal').dataset.status || 'normal';
-      const note = document.getElementById('modal-note').value;
-      const size = parseInt(document.getElementById('modal-size').value) || 18;
-      const offsetX = parseInt(document.getElementById('modal-offset-x').value) || 0;
-      const offsetY = parseInt(document.getElementById('modal-offset-y').value) || 0;
-      const rotate = parseInt(document.getElementById('modal-rotate').value) || 0;
-      const now = new Date().toISOString();
+      const name     = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
+      const type     = document.getElementById('modal-type').value;
+      const status   = document.getElementById('device-modal').dataset.status || 'normal';
+      const note     = document.getElementById('modal-note').value.trim();
+      const location = document.getElementById('modal-location-input').value.trim();
+      const size     = parseInt(document.getElementById('modal-size').value)    || 18;
+      const offsetX  = parseInt(document.getElementById('modal-offset-x').value) || 0;
+      const offsetY  = parseInt(document.getElementById('modal-offset-y').value) || 0;
+      const rotate   = parseInt(document.getElementById('modal-rotate').value)   || 0;
+      const now      = new Date().toISOString();
 
       if (isCreating && tempCoords) {
         const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
-        devices.push({
-          id: newId,
-          name: name,
-          type: type,
-          location: `พิกัด ${tempCoords.x}, ${tempCoords.y}`,
-          x: tempCoords.x,
-          y: tempCoords.y,
-          status: status,
-          note: note,
-          size: size,
-          offsetX: offsetX,
-          offsetY: offsetY,
-          rotate: rotate,
-          updatedAt: now
-        });
+        devices.push({ id:newId, name, type, location, x:tempCoords.x, y:tempCoords.y,
+          status, note, size, offsetX, offsetY, rotate,
+          createdAt: now, updatedAt: now });
       } else if (currentDeviceId !== null) {
         const device = devices.find(d => d.id === currentDeviceId);
         if (device) {
-          device.name = name;
-          device.type = type;
-          device.status = status;
-          device.note = note;
-          device.size = size;
-          device.offsetX = offsetX;
-          device.offsetY = offsetY;
-          device.rotate = rotate;
-          device.updatedAt = now;
+          Object.assign(device, { name, type, location, status, note, size, offsetX, offsetY, rotate, updatedAt: now });
         }
       }
 
@@ -794,115 +917,207 @@
     }
 
     // ============================================================
-    // รายงาน (แก้ไขแล้ว - ใช้การต่อสตริงแทน Template String)
+    // ปิด Modal
+    // ============================================================
+    document.getElementById('device-modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+    // ============================================================
+    // รายงาน (ปรับปรุงใหม่)
     // ============================================================
     function showReport() {
-      if (devices.length === 0) {
-        alert('⚠️ ยังไม่มีอุปกรณ์ในระบบ');
-        return;
-      }
+      if (devices.length === 0) { alert('⚠️ ยังไม่มีอุปกรณ์ในระบบ'); return; }
 
-      var html = '';
-      html += '<!DOCTYPE html>\n';
-      html += '<html>\n';
-      html += '<head>\n';
-      html += '  <meta charset="UTF-8">\n';
-      html += '  <title>รายงานอุปกรณ์</title>\n';
-      html += '  <style>\n';
-      html += '    body { font-family: "Prompt", sans-serif; padding: 30px; background: #f8fafc; }\n';
-      html += '    .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }\n';
-      html += '    h1 { color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }\n';
-      html += '    .meta { color: #64748b; margin-bottom: 20px; }\n';
-      html += '    table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n';
-      html += '    th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; }\n';
-      html += '    td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }\n';
-      html += '    .status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; }\n';
-      html += '    .badge-normal { background: #d1fae5; color: #065f46; }\n';
-      html += '    .badge-broken { background: #fecdd3; color: #9f1239; }\n';
-      html += '    .badge-pending { background: #fde68a; color: #92400e; }\n';
-      html += '    .badge-fixed { background: #bfdbfe; color: #1e40af; }\n';
-      html += '    .print-btn { padding: 10px 24px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }\n';
-      html += '    .print-btn:hover { background: #4338ca; }\n';
-      html += '    @media print { .no-print { display: none; } body { background: white; padding: 0; } .container { box-shadow: none; } }\n';
-      html += '  </style>\n';
-      html += '</head>\n';
-      html += '<body>\n';
-      html += '  <div class="container">\n';
-      html += '    <button onclick="window.print()" class="print-btn no-print">🖨️ พิมพ์รายงาน</button>\n';
-      html += '    <h1>📊 รายงานสรุปอุปกรณ์ไฟฟ้า</h1>\n';
-      html += '    <div class="meta">จำนวนทั้งหมด: ' + devices.length + ' รายการ • วันที่: ' + new Date().toLocaleString('th-TH') + '</div>\n';
-      html += '    <table>\n';
-      html += '      <thead>\n';
-      html += '        <tr><th>#</th><th>ชื่ออุปกรณ์</th><th>ประเภท</th><th>สถานที่</th><th>สถานะ</th><th>หมายเหตุ</th></tr>\n';
-      html += '      </thead>\n';
-      html += '      <tbody>\n';
+      const counts = { normal:0, broken:0, pending:0, fixed:0 };
+      devices.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
 
-      for (var i = 0; i < devices.length; i++) {
-        var d = devices[i];
-        var statusText = statusLabels[d.status] || d.status;
-        html += '        <tr>\n';
-        html += '          <td>' + (i + 1) + '</td>\n';
-        html += '          <td>' + d.name + '</td>\n';
-        html += '          <td>' + d.type + '</td>\n';
-        html += '          <td>' + (d.location || '-') + '</td>\n';
-        html += '          <td><span class="status-badge badge-' + d.status + '">' + statusText + '</span></td>\n';
-        html += '          <td>' + (d.note || '-') + '</td>\n';
-        html += '        </tr>\n';
-      }
+      // จัดกลุ่มตามประเภท
+      const byType = {};
+      devices.forEach(d => { if (!byType[d.type]) byType[d.type] = []; byType[d.type].push(d); });
 
-      html += '      </tbody>\n';
-      html += '    </table>\n';
-      html += '    <div style="margin-top: 20px; color: #94a3b8; font-size: 13px;">อัปเดตล่าสุด: ' + new Date().toLocaleString('th-TH') + '</div>\n';
-      html += '  </div>\n';
-      html += '</body>\n';
-      html += '</html>';
+      // จัดกลุ่มตามสถานที่
+      const byLoc = {};
+      devices.forEach(d => {
+        const loc = d.location || 'ไม่ระบุ';
+        if (!byLoc[loc]) byLoc[loc] = [];
+        byLoc[loc].push(d);
+      });
 
-      var win = window.open('', '_blank', 'width=900,height=700');
+      const summaryByType = Object.entries(byType).map(([type, list]) =>
+        `<tr><td>${deviceTypes[type]||'🔧'} ${type}</td><td style="text-align:center">${list.length}</td>
+         <td style="text-align:center;color:#10b981">${list.filter(d=>d.status==='normal').length}</td>
+         <td style="text-align:center;color:#f43f5e">${list.filter(d=>d.status==='broken').length}</td>
+         <td style="text-align:center;color:#f59e0b">${list.filter(d=>d.status==='pending').length}</td>
+         <td style="text-align:center;color:#3b82f6">${list.filter(d=>d.status==='fixed').length}</td></tr>`
+      ).join('');
+
+      const deviceRows = devices.map((d, i) => `
+        <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+          <td>${i+1}</td>
+          <td><strong>${d.name}</strong></td>
+          <td>${deviceTypes[d.type]||'🔧'} ${d.type}</td>
+          <td>${d.location || '-'}</td>
+          <td><span class="badge badge-${d.status}">${statusEmojis[d.status]} ${statusLabels[d.status]}</span></td>
+          <td>${d.note || '-'}</td>
+          <td style="font-size:11px;color:#94a3b8">${d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('th-TH') : '-'}</td>
+        </tr>`
+      ).join('');
+
+      const brokenDevices = devices.filter(d => d.status === 'broken' || d.status === 'pending');
+      const alertSection = brokenDevices.length > 0 ? `
+        <div class="alert">
+          ⚠️ <strong>ต้องดำเนินการ ${brokenDevices.length} รายการ:</strong>
+          ${brokenDevices.map(d => `<br>• ${d.name} (${d.location||'ไม่ระบุ'}) — ${statusLabels[d.status]}`).join('')}
+        </div>` : `<div class="alert ok">✅ ไม่มีอุปกรณ์ที่ต้องดำเนินการ</div>`;
+
+      const html = `<!DOCTYPE html><html lang="th"><head>
+        <meta charset="UTF-8">
+        <title>รายงานอุปกรณ์ไฟฟ้า</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap');
+          body { font-family:'Prompt',sans-serif; background:#f1f5f9; padding:20px; }
+          .container { max-width:960px; margin:0 auto; background:white; padding:32px; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.1); }
+          .header { border-bottom:3px solid #6366f1; padding-bottom:16px; margin-bottom:24px; }
+          h1 { color:#1e293b; margin:0 0 4px; }
+          .meta { color:#64748b; font-size:13px; }
+          .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:24px; }
+          .stat-card { background:#f8fafc; border-radius:12px; padding:14px; text-align:center; border-left:4px solid; }
+          .stat-card .num { font-size:28px; font-weight:700; }
+          .stat-card .lbl { font-size:12px; color:#64748b; }
+          .s-total{border-color:#64748b}.s-normal{border-color:#10b981}.s-broken{border-color:#f43f5e}.s-pending{border-color:#f59e0b}.s-fixed{border-color:#3b82f6}
+          table { width:100%; border-collapse:collapse; font-size:13px; }
+          th { background:#f1f5f9; padding:10px 12px; text-align:left; font-weight:600; border-bottom:2px solid #e2e8f0; }
+          td { padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+          .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:500; }
+          .badge-normal{background:#d1fae5;color:#065f46}.badge-broken{background:#fee2e2;color:#991b1b}
+          .badge-pending{background:#fef3c7;color:#92400e}.badge-fixed{background:#dbeafe;color:#1e40af}
+          .section-title { font-size:16px; font-weight:700; color:#1e293b; margin:24px 0 10px; padding-left:8px; border-left:4px solid #6366f1; }
+          .alert { background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:14px 18px; margin-bottom:20px; color:#9a3412; font-size:13px; line-height:1.8; }
+          .alert.ok { background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
+          .print-btn { padding:10px 24px; background:#6366f1; color:white; border:none; border-radius:8px; cursor:pointer; font-family:'Prompt',sans-serif; font-size:14px; margin-bottom:20px; }
+          .print-btn:hover { background:#4f46e5; }
+          .footer { margin-top:24px; text-align:right; font-size:12px; color:#94a3b8; }
+          @media print { .no-print{display:none} body{background:white;padding:0} .container{box-shadow:none;border-radius:0} }
+        </style>
+      </head><body>
+        <div class="container">
+          <button onclick="window.print()" class="print-btn no-print">🖨️ พิมพ์รายงาน</button>
+          <div class="header">
+            <h1>⚡ รายงานสรุปอุปกรณ์ไฟฟ้า</h1>
+            <div class="meta">📅 วันที่: ${new Date().toLocaleString('th-TH')} &nbsp;•&nbsp; จำนวนทั้งหมด: ${devices.length} รายการ</div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card s-total"><div class="num">${devices.length}</div><div class="lbl">📌 ทั้งหมด</div></div>
+            <div class="stat-card s-normal"><div class="num" style="color:#10b981">${counts.normal}</div><div class="lbl">✅ ปกติ</div></div>
+            <div class="stat-card s-broken"><div class="num" style="color:#f43f5e">${counts.broken}</div><div class="lbl">⚠️ เสีย</div></div>
+            <div class="stat-card s-pending"><div class="num" style="color:#f59e0b">${counts.pending}</div><div class="lbl">⏳ รอซ่อม</div></div>
+            <div class="stat-card s-fixed"><div class="num" style="color:#3b82f6">${counts.fixed}</div><div class="lbl">🔧 ซ่อมแล้ว</div></div>
+          </div>
+
+          ${alertSection}
+
+          <div class="section-title">สรุปตามประเภท</div>
+          <table>
+            <thead><tr><th>ประเภท</th><th style="text-align:center">รวม</th><th style="text-align:center">ปกติ</th><th style="text-align:center">เสีย</th><th style="text-align:center">รอซ่อม</th><th style="text-align:center">ซ่อมแล้ว</th></tr></thead>
+            <tbody>${summaryByType}</tbody>
+          </table>
+
+          <div class="section-title">รายการอุปกรณ์ทั้งหมด</div>
+          <table>
+            <thead><tr><th>#</th><th>ชื่ออุปกรณ์</th><th>ประเภท</th><th>สถานที่/โซน</th><th>สถานะ</th><th>หมายเหตุ</th><th>อัปเดต</th></tr></thead>
+            <tbody>${deviceRows}</tbody>
+          </table>
+
+          <div class="footer">สร้างจากระบบจัดการเลย์เอาต์เครื่องใช้ไฟฟ้า • ${new Date().toLocaleString('th-TH')}</div>
+        </div>
+      </body></html>`;
+
+      const win = window.open('', '_blank', 'width=1000,height=750');
       win.document.write(html);
       win.document.close();
     }
 
     // ============================================================
-    // ส่งออก CSV
+    // ส่งออก CSV (ปรับปรุงใหม่)
     // ============================================================
+    function csvEscape(val) {
+      const s = String(val ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s;
+    }
+
     function exportCSV() {
-      if (devices.length === 0) {
-        alert('⚠️ ยังไม่มีข้อมูล');
-        return;
-      }
-      const headers = ['ชื่ออุปกรณ์', 'ประเภท', 'สถานที่', 'สถานะ', 'หมายเหตุ', 'พิกัด X', 'พิกัด Y', 'อัปเดตล่าสุด'];
-      const rows = devices.map(d => [
-        d.name, d.type, d.location || '', statusLabels[d.status] || d.status, d.note || '',
-        Math.round(d.x), Math.round(d.y), d.updatedAt ? new Date(d.updatedAt).toLocaleString('th-TH') : ''
-      ]);
-      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      if (devices.length === 0) { alert('⚠️ ยังไม่มีข้อมูล'); return; }
+      const headers = ['#','ชื่ออุปกรณ์','ประเภท','สถานที่/โซน','สถานะ (ค่า)','สถานะ (ไทย)','หมายเหตุ','พิกัด X','พิกัด Y','วันที่สร้าง','วันที่อัปเดตล่าสุด'];
+      const rows = devices.map((d, i) => [
+        i + 1,
+        d.name,
+        d.type,
+        d.location || '',
+        d.status,
+        statusLabels[d.status] || d.status,
+        d.note || '',
+        Math.round(d.x),
+        Math.round(d.y),
+        d.createdAt ? new Date(d.createdAt).toLocaleString('th-TH') : '',
+        d.updatedAt ? new Date(d.updatedAt).toLocaleString('th-TH') : ''
+      ].map(csvEscape));
+
+      const csvContent = [headers.map(csvEscape).join(','), ...rows.map(r => r.join(','))].join('\r\n');
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `รายงานอุปกรณ์_${new Date().toISOString().slice(0,10)}.csv`;
       link.click();
       URL.revokeObjectURL(link.href);
+      showUploadStatus(`📥 ส่งออก CSV ${devices.length} รายการ`, 'success');
     }
 
     // ============================================================
-    // ปิด modal ด้วย ESC / คลิกพื้นหลัง
+    // Export / Import JSON
     // ============================================================
-    document.getElementById('device-modal').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeModal();
-    });
+    function exportJSON() {
+      if (devices.length === 0) { alert('⚠️ ยังไม่มีข้อมูล'); return; }
+      const data = { exportedAt: new Date().toISOString(), version: 7, count: devices.length, devices };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `backup_อุปกรณ์_${new Date().toISOString().slice(0,10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showUploadStatus(`💾 Export JSON ${devices.length} รายการ`, 'success');
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          const imported = data.devices || (Array.isArray(data) ? data : null);
+          if (!imported) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
+          if (!confirm(`📂 นำเข้า ${imported.length} รายการ?\n(จะเพิ่มเข้ากับข้อมูลที่มีอยู่)`)) return;
+          const maxId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) : 0;
+          imported.forEach((d, i) => { d.id = maxId + i + 1; });
+          devices = [...devices, ...imported];
+          saveData();
+          showUploadStatus(`✅ นำเข้า ${imported.length} รายการเรียบร้อย`, 'success');
+        } catch(err) {
+          showUploadStatus('❌ ไฟล์ไม่ถูกต้อง: ' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
 
     // ============================================================
-    // เริ่มต้นระบบ
+    // เริ่มต้น
     // ============================================================
     loadData();
     applyZoom();
     setMode('view');
-
     console.log('✅ ระบบโหลดเรียบร้อย!');
-    console.log('📌 อุปกรณ์ทั้งหมด:', devices.length, 'รายการ');
   </script>
 </body>
 </html>
