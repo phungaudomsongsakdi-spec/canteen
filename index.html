@@ -7,6 +7,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <!-- SheetJS (XLSX) for Excel export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- html2canvas + jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
     * { box-sizing: border-box; }
@@ -226,6 +229,18 @@
     .a4-control label { font-size: 13px; font-weight: 500; color: #475569; }
     .a4-control input[type="range"] { width: 100px; accent-color: #6366f1; }
     .a4-control span { font-size: 13px; font-weight: 600; color: #1e293b; min-width: 40px; }
+
+    /* PDF specific - hide scrollbar while capturing */
+    .pdf-capture .map-container {
+      overflow: visible !important;
+      max-height: none !important;
+    }
+    .pdf-capture #floorplan {
+      transform: scale(1) !important;
+    }
+    .pdf-capture .zoom-controls {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -272,8 +287,9 @@
           </div>
         </div>
 
-        <!-- ส่งออก (เหลือเฉพาะ Excel กับ Report) -->
+        <!-- ส่งออก (Excel, PDF, Report) -->
         <button onclick="exportExcel()" class="px-3 py-1.5 text-sm rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition shadow-sm">📊 Excel</button>
+        <button onclick="exportPDF()" class="px-3 py-1.5 text-sm rounded-xl bg-red-100 text-red-700 hover:bg-red-200 transition shadow-sm">📄 PDF</button>
         <button onclick="showReport()" class="px-3 py-1.5 text-sm rounded-xl bg-purple-100 text-purple-700 hover:bg-purple-200 transition shadow-sm">📄 รายงาน</button>
         <button onclick="resetData()" class="px-3 py-1.5 text-sm rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition shadow-sm">🔄 รีเซ็ต</button>
       </div>
@@ -501,7 +517,6 @@
     // โหลด / บันทึกข้อมูล
     // ============================================================
     function loadData() {
-      // load custom types
       const savedTypes = localStorage.getItem('electricalCustomTypes_v7');
       if (savedTypes) {
         try { customTypes = JSON.parse(savedTypes); } catch(e) { customTypes = {}; }
@@ -534,7 +549,6 @@
     function saveCustomTypes() {
       localStorage.setItem('electricalCustomTypes_v7', JSON.stringify(customTypes));
       renderCustomTypeUI();
-      // update select options in modal
       populateTypeSelect();
     }
 
@@ -563,7 +577,6 @@
         span.innerHTML = `${emoji} ${name} <button class="del-type" onclick="removeCustomType('${name}')">×</button>`;
         container.appendChild(span);
       });
-      // also update modal type list
       populateTypeSelect();
     }
 
@@ -687,12 +700,7 @@
     function updateA4Scale(val) {
       a4Scale = parseFloat(val);
       document.getElementById('a4-scale-label').textContent = Math.round(a4Scale * 100) + '%';
-      // apply to SVG container: we scale the SVG itself
-      const svg = document.getElementById('floorplan');
-      const baseScale = zoomLevel;
-      const totalScale = baseScale * a4Scale;
-      svg.style.transform = `scale(${totalScale})`;
-      document.getElementById('zoomLevel').textContent = Math.round(totalScale * 100) + '%';
+      applyZoom();
     }
 
     // ============================================================
@@ -966,7 +974,6 @@
       event.stopPropagation();
       if (currentMode === 'drag') return;
       if (currentMode === 'delete') {
-        // กด Ctrl เพื่อยืนยันการลบ
         if (event.ctrlKey) {
           if (!confirm('🗑️ ยืนยันลบจุดนี้?')) return;
         } else {
@@ -1111,7 +1118,80 @@
     document.getElementById('type-manager-modal').addEventListener('click', function(e) { if (e.target === this) closeTypeManager(); });
 
     // ============================================================
-    // รายงาน (ปรับปรุง)
+    // ส่งออก PDF (เต็ม A4)
+    // ============================================================
+    function exportPDF() {
+      if (devices.length === 0) {
+        alert('⚠️ ยังไม่มีข้อมูลอุปกรณ์');
+        return;
+      }
+
+      showUploadStatus('⏳ กำลังสร้าง PDF...', 'info');
+
+      const container = document.getElementById('mapContainer');
+      const originalOverflow = container.style.overflow;
+      const originalMaxHeight = container.style.maxHeight;
+      
+      // เตรียม view สำหรับจับภาพ: ขยายให้เต็ม
+      container.style.overflow = 'visible';
+      container.style.maxHeight = 'none';
+      document.body.classList.add('pdf-capture');
+
+      // ซ่อนปุ่มซูม
+      const zoomControls = document.querySelector('.zoom-controls');
+      if (zoomControls) zoomControls.style.display = 'none';
+
+      // รอให้ DOM อัปเดต
+      setTimeout(() => {
+        html2canvas(container, {
+          scale: 1.5,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: container.scrollWidth,
+          height: container.scrollHeight,
+        }).then(canvas => {
+          // คืนค่าเดิม
+          container.style.overflow = originalOverflow || 'auto';
+          container.style.maxHeight = originalMaxHeight || '72vh';
+          document.body.classList.remove('pdf-capture');
+          if (zoomControls) zoomControls.style.display = '';
+
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF('landscape', 'mm', 'a4');
+          
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          
+          // คำนวณสัดส่วนให้เต็มกระดาษ
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+          const finalWidth = imgWidth * ratio;
+          const finalHeight = imgHeight * ratio;
+          
+          const offsetX = (pdfWidth - finalWidth) / 2;
+          const offsetY = (pdfHeight - finalHeight) / 2;
+          
+          pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalWidth, finalHeight);
+          pdf.save(`แปลนอุปกรณ์_${new Date().toISOString().slice(0,10)}.pdf`);
+          
+          showUploadStatus('📄 ส่งออก PDF สำเร็จ!', 'success');
+        }).catch(err => {
+          console.error(err);
+          container.style.overflow = originalOverflow || 'auto';
+          container.style.maxHeight = originalMaxHeight || '72vh';
+          document.body.classList.remove('pdf-capture');
+          if (zoomControls) zoomControls.style.display = '';
+          showUploadStatus('❌ สร้าง PDF ล้มเหลว', 'error');
+        });
+      }, 300);
+    }
+
+    // ============================================================
+    // รายงาน
     // ============================================================
     function showReport() {
       if (devices.length === 0) { alert('⚠️ ยังไม่มีอุปกรณ์ในระบบ'); return; }
@@ -1251,7 +1331,6 @@
       const ws = XLSX.utils.json_to_sheet(data);
       XLSX.utils.book_append_sheet(wb, ws, 'อุปกรณ์');
       
-      // Adjust column widths
       const colWidths = [
         { wch: 8 }, { wch: 20 }, { wch: 18 }, { wch: 18 },
         { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 10 },
@@ -1276,17 +1355,6 @@
     applyZoom();
     setMode('view');
     console.log('✅ ระบบโหลดเรียบร้อย!');
-
-    // Override applyZoom to incorporate a4 scale
-    const originalApplyZoom = applyZoom;
-    applyZoom = function() {
-      const baseScale = zoomLevel;
-      const totalScale = baseScale * a4Scale;
-      document.getElementById('floorplan').style.transform = `scale(${totalScale})`;
-      document.getElementById('zoomLevel').textContent = Math.round(totalScale * 100) + '%';
-    };
-    // Re-apply
-    applyZoom();
   </script>
 </body>
 </html>
