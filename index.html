@@ -998,22 +998,56 @@
         clickArea.addEventListener('mouseleave', hideTooltip);
         g.appendChild(clickArea);
 
-        // ไม่ใช้สีตามสถานะแล้ว แสดงเป็นวงกลมพื้นขาวกลาง ๆ เหมือนกันทุกจุด เน้นที่ไอคอนแทน
+        // จุดที่ "แจ้งซ่อม" (สถานะเสีย) แสดงเป็นวงกลมสีแดงมีเรืองแสงเหมือนเดิม เพื่อให้เห็นชัดว่าต้องรีบดำเนินการ
+        // สถานะอื่น (ปกติ/รอซ่อม/ซ่อมแล้ว) ยังคงเป็นวงกลมพื้นขาวกลาง ๆ เน้นที่ไอคอนแทน
+        const isBroken = device.status === 'broken';
+
+        if (isBroken) {
+          const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          glow.setAttribute('r', size + 10);
+          glow.setAttribute('fill', statusColors.broken);
+          glow.setAttribute('opacity', '0.25');
+          glow.setAttribute('filter', 'url(#glow)');
+          g.appendChild(glow);
+        }
+
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('r', size);
-        circle.setAttribute('fill', '#ffffff');
-        circle.setAttribute('stroke', '#94a3b8');
-        circle.setAttribute('stroke-width', '2');
+        circle.setAttribute('fill', isBroken ? statusColors.broken : '#ffffff');
+        circle.setAttribute('stroke', isBroken ? '#fff' : '#94a3b8');
+        circle.setAttribute('stroke-width', isBroken ? '3' : '2');
         circle.setAttribute('filter', 'url(#shadow)');
         g.appendChild(circle);
 
-        const allTypes = getDeviceTypes();
-        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        icon.setAttribute('text-anchor', 'middle');
-        icon.setAttribute('dy', size * 0.42);
-        icon.setAttribute('style', `font-size: ${size * 1.15}px;`);
-        icon.textContent = allTypes[device.type] || '🔧';
-        g.appendChild(icon);
+        // ไอคอนหลอดไฟหลายดวง: วาดเป็นแท่งหลอดไฟ LED เรียงแถวจริง ๆ แทนตัวเลขยกกำลัง จะดูออกง่ายกว่า
+        const multiLightRows = device.type === 'หลอดไฟ (3 ดวง)' ? 3 : (device.type === 'หลอดไฟ (2 ดวง)' ? 2 : 0);
+        if (multiLightRows > 0) {
+          const barW  = size * 1.5;
+          const barH  = size * 0.32;
+          const gap   = size * 0.22;
+          const totalH = multiLightRows * barH + (multiLightRows - 1) * gap;
+          const startY = -totalH / 2;
+          for (let i = 0; i < multiLightRows; i++) {
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', -barW / 2);
+            rect.setAttribute('y', startY + i * (barH + gap));
+            rect.setAttribute('width', barW);
+            rect.setAttribute('height', barH);
+            rect.setAttribute('rx', barH / 2);
+            rect.setAttribute('fill', isBroken ? '#ffffff' : '#fde047');
+            rect.setAttribute('stroke', isBroken ? '#fff' : '#ca8a04');
+            rect.setAttribute('stroke-width', '1.2');
+            g.appendChild(rect);
+          }
+        } else {
+          const allTypes = getDeviceTypes();
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          icon.setAttribute('text-anchor', 'middle');
+          icon.setAttribute('dy', size * 0.42);
+          icon.setAttribute('style', `font-size: ${size * 1.15}px;`);
+          icon.textContent = allTypes[device.type] || '🔧';
+          g.appendChild(icon);
+        }
 
         layer.appendChild(g);
       });
@@ -1430,8 +1464,16 @@
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
 
-          // เติมเต็มกระดาษ A4 แนวนอนทั้งหน้า (ไม่เว้นขอบขาว)
-          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+          // รักษาสัดส่วนภาพไว้ (ไม่บีบภาพผิดสัดส่วน) แต่เพราะตัดพื้นที่ว่างออกไปแล้วก่อนหน้านี้
+          // ภาพจะเต็มเกือบทั้งหน้ากระดาษโดยแทบไม่เห็นขอบขาว
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+          const finalWidth = imgWidth * ratio;
+          const finalHeight = imgHeight * ratio;
+          const offsetX = (pdfWidth - finalWidth) / 2;
+          const offsetY = (pdfHeight - finalHeight) / 2;
+          pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalWidth, finalHeight);
           pdf.save(`แปลนอุปกรณ์_${new Date().toISOString().slice(0,10)}.pdf`);
 
           showUploadStatus('📄 ส่งออก PDF สำเร็จ!', 'success');
