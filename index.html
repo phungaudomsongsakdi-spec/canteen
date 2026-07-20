@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ระบบจัดการเลย์เอาต์เครื่องใช้ไฟฟ้า</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">
+  </script>
   <!-- SheetJS (XLSX) for Excel export -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js">
+  </script>
   <!-- html2canvas + jsPDF for PDF export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
     * { box-sizing: border-box; }
@@ -275,6 +279,28 @@
       vertical-align: -2px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* หลอดไฟหลายดวง: วาดเป็นแท่งไฟ */
+    .report-light-bars {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .report-light-bar {
+      width: 18px;
+      height: 5px;
+      border-radius: 3px;
+      background: #fde047;
+      border: 1px solid #ca8a04;
+      flex-shrink: 0;
+    }
+    .report-light-bar.broken {
+      background: #f43f5e;
+      border-color: #9f1239;
+    }
   </style>
 </head>
 <body>
@@ -566,15 +592,13 @@
     };
     let customTypes = {};
 
-    // สีเหล่านี้ใช้เฉพาะในตารางรายงาน/ป้ายสถานะเท่านั้น
-    // จุดบนแผนผังไม่ใช้สีแล้ว (แสดงแค่ไอคอน) ตามที่ต้องการ
     const statusColors  = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
     const statusLabels  = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
     const statusEmojis  = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
 
     let devices       = [];
     let planImageData = null;
-    let planImageMeta = null; // { width, height } ขนาดจริงของรูปแปลนที่อัปโหลด ใช้คำนวณพื้นที่จริงตอนส่งออก PDF
+    let planImageMeta = null;
     let currentMode   = 'view';
     let currentDeviceId = null;
     let isCreating    = false;
@@ -587,9 +611,6 @@
 
     // ============================================================
     // ตัวช่วยจัดเก็บข้อมูล (persistent storage)
-    // window.storage เป็น API เฉพาะของ Claude.ai artifact เท่านั้น
-    // ถ้านำโค้ดไปโฮสต์เอง (เช่น GitHub Pages) จะไม่มี API นี้
-    // จึงเช็คก่อนใช้ และสลับไปใช้ localStorage แทนโดยอัตโนมัติ
     // ============================================================
     const STORAGE_PREFIX = 'electricalLayout_';
     const hasCloudStorage = (typeof window !== 'undefined' &&
@@ -603,7 +624,7 @@
           const res = await window.storage.get(key, false);
           return res ? res.value : null;
         } catch (e) {
-          return null; // key ยังไม่มี หรือดึงข้อมูลล้มเหลว
+          return null;
         }
       }
       try {
@@ -656,11 +677,12 @@
     function defaultDevices() {
       const now = new Date().toISOString();
       return [
-        { id:1, name:'หลอดไฟ ห้องประชุม', type:'หลอดไฟ',            location:'ห้องประชุม', x:1000, y:500, status:'normal',  note:'',                size:18, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:2, name:'พัดลมเพดาน 1',       type:'พัดลม',             location:'ห้องรับรอง', x:1800, y:300, status:'broken',  note:'พัดลมมีเสียงดัง',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:3, name:'แอร์ห้องประชุม',     type:'เครื่องปรับอากาศ', location:'ห้องประชุม', x:2200, y:400, status:'pending', note:'รอช่างมาตรวจ',     size:24, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:4, name:'กล้อง CCTV 1',       type:'กล้องวงจรปิด',      location:'ทางเข้า',    x:600,  y:200, status:'normal',  note:'',                size:20, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:5, name:'เบรกเกอร์หลัก',      type:'เบรกเกอร์',         location:'ห้องไฟฟ้า', x:3000, y:800, status:'fixed',   note:'เปลี่ยนใหม่แล้ว',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:1, name:'หลอดไฟ ห้องประชุม', type:'หลอดไฟ (3 ดวง)', location:'ห้องประชุม', x:1000, y:500, status:'normal', note:'', size:18, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:2, name:'พัดลมเพดาน 1', type:'พัดลม', location:'ห้องรับรอง', x:1800, y:300, status:'broken', note:'พัดลมมีเสียงดัง', size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:3, name:'แอร์ห้องประชุม', type:'เครื่องปรับอากาศ', location:'ห้องประชุม', x:2200, y:400, status:'pending', note:'รอช่างมาตรวจ', size:24, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:4, name:'กล้อง CCTV 1', type:'กล้องวงจรปิด', location:'ทางเข้า', x:600, y:200, status:'normal', note:'', size:20, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:5, name:'เบรกเกอร์หลัก', type:'เบรกเกอร์', location:'ห้องไฟฟ้า', x:3000, y:800, status:'fixed', note:'เปลี่ยนใหม่แล้ว', size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id:6, name:'หลอดไฟโถงทางเดิน', type:'หลอดไฟ (2 ดวง)', location:'โถงทางเดิน', x:1400, y:900, status:'normal', note:'', size:18, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
       ];
     }
 
@@ -822,7 +844,6 @@
         const img = new Image();
         img.onload = async function() {
           try {
-            // ย่อขนาดรูปด้วย canvas เพื่อให้พอดีกับโควต้าจัดเก็บข้อมูล (จำกัด 5MB ต่อคีย์)
             const maxDim = 2000;
             let { width, height } = img;
             if (width > maxDim || height > maxDim) {
@@ -851,7 +872,6 @@
 
             const ok = await storageSet('planImage', dataUrl);
             if (!ok) { showUploadStatus('❌ บันทึกรูปแปลนล้มเหลว', 'error'); return; }
-            // เก็บสัดส่วนจริงของรูปต้นฉบับไว้ เพื่อคำนวณพื้นที่ที่รูปแสดงจริงตอนส่งออก PDF (ตัดขอบขาวส่วนเกิน)
             planImageMeta = { width: img.naturalWidth, height: img.naturalHeight };
             await storageSet('planImageMeta', JSON.stringify(planImageMeta));
             planImageData = dataUrl;
@@ -892,10 +912,6 @@
       });
     }
 
-    // ============================================================
-    // คำนวณขอบเขตพื้นที่ที่มีเนื้อหาจริง (จุดอุปกรณ์ + รูปแปลน)
-    // ใช้ตอนส่งออก PDF เพื่อตัดพื้นที่ว่างส่วนเกินออก ให้รูปเต็มหน้ากระดาษจริง ๆ
-    // ============================================================
     function computeContentBBox() {
       const VB_W = 4600, VB_H = 2000;
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -957,12 +973,12 @@
     }
 
     // ============================================================
-    // Modal ยืนยัน (แทน confirm())
+    // Modal ยืนยัน
     // ============================================================
     function askConfirm(message, onYes) {
       document.getElementById('confirm-message').textContent = message;
       const yesBtn = document.getElementById('confirm-yes');
-      const freshBtn = yesBtn.cloneNode(true); // ล้าง listener เดิม
+      const freshBtn = yesBtn.cloneNode(true);
       yesBtn.parentNode.replaceChild(freshBtn, yesBtn);
       freshBtn.addEventListener('click', () => { closeConfirm(); onYes(); });
       document.getElementById('confirm-modal').classList.add('active');
@@ -972,7 +988,7 @@
     }
 
     // ============================================================
-    // เรนเดอร์
+    // เรนเดอร์บนแผนผัง
     // ============================================================
     function render() {
       const layer = document.getElementById('device-layer');
@@ -998,8 +1014,6 @@
         clickArea.addEventListener('mouseleave', hideTooltip);
         g.appendChild(clickArea);
 
-        // จุดที่ "แจ้งซ่อม" (สถานะเสีย) แสดงเป็นวงกลมสีแดงมีเรืองแสงเหมือนเดิม เพื่อให้เห็นชัดว่าต้องรีบดำเนินการ
-        // สถานะอื่น (ปกติ/รอซ่อม/ซ่อมแล้ว) ยังคงเป็นวงกลมพื้นขาวกลาง ๆ เน้นที่ไอคอนแทน
         const isBroken = device.status === 'broken';
 
         if (isBroken) {
@@ -1019,7 +1033,7 @@
         circle.setAttribute('filter', 'url(#shadow)');
         g.appendChild(circle);
 
-        // ไอคอนหลอดไฟหลายดวง: วาดเป็นแท่งหลอดไฟ LED เรียงแถวจริง ๆ แทนตัวเลขยกกำลัง จะดูออกง่ายกว่า
+        // หลอดไฟหลายดวง: วาดเป็นแท่งไฟ
         const multiLightRows = device.type === 'หลอดไฟ (3 ดวง)' ? 3 : (device.type === 'หลอดไฟ (2 ดวง)' ? 2 : 0);
         if (multiLightRows > 0) {
           const barW  = size * 1.5;
@@ -1034,8 +1048,8 @@
             rect.setAttribute('width', barW);
             rect.setAttribute('height', barH);
             rect.setAttribute('rx', barH / 2);
-            rect.setAttribute('fill', isBroken ? '#ffffff' : '#fde047');
-            rect.setAttribute('stroke', isBroken ? '#fff' : '#ca8a04');
+            rect.setAttribute('fill', isBroken ? '#f43f5e' : '#fde047');
+            rect.setAttribute('stroke', isBroken ? '#9f1239' : '#ca8a04');
             rect.setAttribute('stroke-width', '1.2');
             g.appendChild(rect);
           }
@@ -1051,6 +1065,19 @@
 
         layer.appendChild(g);
       });
+    }
+
+    // ============================================================
+    // สร้าง HTML แท่งไฟสำหรับรายงาน
+    // ============================================================
+    function getLightBarsHTML(count, isBroken) {
+      if (count < 2) return '';
+      let html = '<span class="report-light-bars">';
+      for (let i = 0; i < count; i++) {
+        html += `<span class="report-light-bar${isBroken ? ' broken' : ''}"></span>`;
+      }
+      html += '</span>';
+      return html;
     }
 
     // ============================================================
@@ -1187,7 +1214,6 @@
       }
     });
 
-    // เพิ่มจุดทันทีโดยไม่เปิดฟอร์ม ใช้สำหรับวางจุดจำนวนมากรวดเดียว
     async function quickCreateDevice(coords) {
       const typeSelect = document.getElementById('quick-add-type');
       const type = (typeSelect && typeSelect.value) ? typeSelect.value : 'หลอดไฟ';
@@ -1204,7 +1230,7 @@
     }
 
     // ============================================================
-    // DRAG - ย้ายจุด (ใช้ pointer events เพื่อรองรับสัมผัสด้วย)
+    // DRAG - ย้ายจุด
     // ============================================================
     document.getElementById('floorplan').addEventListener('pointerdown', function(e) {
       if (currentMode !== 'drag') return;
@@ -1398,7 +1424,7 @@
     }
 
     // ============================================================
-    // ปิด Modal (คลิกพื้นหลัง / กด Esc)
+    // ปิด Modal
     // ============================================================
     document.getElementById('device-modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
     document.getElementById('type-manager-modal').addEventListener('click', function(e) { if (e.target === this) closeTypeManager(); });
@@ -1409,7 +1435,7 @@
     });
 
     // ============================================================
-    // ส่งออก PDF (เต็มกระดาษ A4 แนวนอน - รูปภาพเต็มหน้ากระดาษ)
+    // ส่งออก PDF
     // ============================================================
     function exportPDF() {
       if (devices.length === 0) { showUploadStatus('⚠️ ยังไม่มีข้อมูลอุปกรณ์', 'error'); return; }
@@ -1426,7 +1452,6 @@
       const originalMaxHeight = container.style.maxHeight;
       const originalViewBox = svg.getAttribute('viewBox');
 
-      // ตัดพื้นที่ว่างส่วนเกินออก โดยซูมเข้าเฉพาะขอบเขตที่มีจุดอุปกรณ์/รูปแปลนจริง
       const bbox = computeContentBBox();
       svg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
 
@@ -1464,8 +1489,6 @@
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
 
-          // รักษาสัดส่วนภาพไว้ (ไม่บีบภาพผิดสัดส่วน) แต่เพราะตัดพื้นที่ว่างออกไปแล้วก่อนหน้านี้
-          // ภาพจะเต็มเกือบทั้งหน้ากระดาษโดยแทบไม่เห็นขอบขาว
           const imgWidth = canvas.width;
           const imgHeight = canvas.height;
           const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
@@ -1486,8 +1509,7 @@
     }
 
     // ============================================================
-    // รายงาน (แสดงเป็น modal ในหน้าเดียวกัน แทนการเปิดหน้าต่างใหม่
-    // เพราะ window.open มักถูกบล็อกในสภาพแวดล้อมแบบฝัง/แซนด์บ็อกซ์)
+    // รายงาน
     // ============================================================
     function showReport() {
       if (devices.length === 0) { showUploadStatus('⚠️ ยังไม่มีอุปกรณ์ในระบบ', 'error'); return; }
@@ -1499,26 +1521,38 @@
       devices.forEach(d => { if (!byType[d.type]) byType[d.type] = []; byType[d.type].push(d); });
 
       const allTypes = getDeviceTypes();
-      const summaryRows = Object.entries(byType).map(([type, list]) => `
+      const summaryRows = Object.entries(byType).map(([type, list]) => {
+        // แสดงไอคอนแท่งไฟแทนตัวเลขยกกำลังในส่วนสรุปตามประเภท
+        let iconHtml = allTypes[type] || '🔧';
+        if (type === 'หลอดไฟ (2 ดวง)') iconHtml = getLightBarsHTML(2, false);
+        else if (type === 'หลอดไฟ (3 ดวง)') iconHtml = getLightBarsHTML(3, false);
+        return `
         <tr class="report-table">
-          <td class="py-2 px-3">${allTypes[type]||'🔧'} ${escapeHtml(type)}</td>
+          <td class="py-2 px-3">${iconHtml} ${escapeHtml(type)}</td>
           <td class="py-2 px-3 text-center font-semibold">${list.length}</td>
           <td class="py-2 px-3 text-center text-emerald-600">${list.filter(d=>d.status==='normal').length}</td>
           <td class="py-2 px-3 text-center text-rose-600">${list.filter(d=>d.status==='broken').length}</td>
           <td class="py-2 px-3 text-center text-amber-600">${list.filter(d=>d.status==='pending').length}</td>
           <td class="py-2 px-3 text-center text-blue-600">${list.filter(d=>d.status==='fixed').length}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
-      const deviceRows = devices.map((d, i) => `
+      const deviceRows = devices.map((d, i) => {
+        // แสดงแท่งไฟในช่องประเภทของแต่ละอุปกรณ์
+        let typeDisplay = allTypes[d.type] || '🔧';
+        if (d.type === 'หลอดไฟ (2 ดวง)') typeDisplay = getLightBarsHTML(2, d.status === 'broken');
+        else if (d.type === 'หลอดไฟ (3 ดวง)') typeDisplay = getLightBarsHTML(3, d.status === 'broken');
+        return `
         <tr class="report-table ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
           <td class="py-2 px-3">${i+1}</td>
           <td class="py-2 px-3 font-semibold">${escapeHtml(d.name)}</td>
-          <td class="py-2 px-3">${allTypes[d.type]||'🔧'} ${escapeHtml(d.type)}</td>
+          <td class="py-2 px-3">${typeDisplay} ${escapeHtml(d.type)}</td>
           <td class="py-2 px-3">${escapeHtml(d.location || '-')}</td>
           <td class="py-2 px-3"><span class="px-2.5 py-0.5 rounded-full text-xs font-medium" style="background:${statusColors[d.status]}22;color:${statusColors[d.status]}">${statusEmojis[d.status]} ${statusLabels[d.status]}</span></td>
           <td class="py-2 px-3">${escapeHtml(d.note || '-')}</td>
           <td class="py-2 px-3 text-xs text-slate-400">${d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('th-TH') : '-'}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
       const brokenDevices = devices.filter(d => d.status === 'broken' || d.status === 'pending');
       const alertSection = brokenDevices.length > 0 ? `
@@ -1574,7 +1608,7 @@
     window.addEventListener('afterprint', () => document.body.classList.remove('printing-report'));
 
     // ============================================================
-    // ส่งออก Excel (ใช้ SheetJS)
+    // ส่งออก Excel
     // ============================================================
     function exportExcel() {
       if (devices.length === 0) { showUploadStatus('⚠️ ยังไม่มีข้อมูล', 'error'); return; }
