@@ -580,29 +580,61 @@
     let a4Scale = 1.0;
 
     // ============================================================
-    // ตัวช่วยจัดเก็บข้อมูล (persistent storage) — ห้ามใช้ localStorage
-    // เพราะใช้งานไม่ได้ในสภาพแวดล้อม artifact และเสี่ยงเต็มโควต้าจากรูปแปลน
+    // ตัวช่วยจัดเก็บข้อมูล (persistent storage)
+    // window.storage เป็น API เฉพาะของ Claude.ai artifact เท่านั้น
+    // ถ้านำโค้ดไปโฮสต์เอง (เช่น GitHub Pages) จะไม่มี API นี้
+    // จึงเช็คก่อนใช้ และสลับไปใช้ localStorage แทนโดยอัตโนมัติ
     // ============================================================
+    const STORAGE_PREFIX = 'electricalLayout_';
+    const hasCloudStorage = (typeof window !== 'undefined' &&
+      window.storage &&
+      typeof window.storage.get === 'function' &&
+      typeof window.storage.set === 'function');
+
     async function storageGet(key) {
+      if (hasCloudStorage) {
+        try {
+          const res = await window.storage.get(key, false);
+          return res ? res.value : null;
+        } catch (e) {
+          return null; // key ยังไม่มี หรือดึงข้อมูลล้มเหลว
+        }
+      }
       try {
-        const res = await window.storage.get(key, false);
-        return res ? res.value : null;
+        return localStorage.getItem(STORAGE_PREFIX + key);
       } catch (e) {
-        return null; // key ยังไม่มี หรือดึงข้อมูลล้มเหลว
+        return null;
       }
     }
     async function storageSet(key, value) {
+      if (hasCloudStorage) {
+        try {
+          const res = await window.storage.set(key, value, false);
+          return !!res;
+        } catch (e) {
+          console.error('cloud storage set failed', key, e);
+          return false;
+        }
+      }
       try {
-        const res = await window.storage.set(key, value, false);
-        return !!res;
+        localStorage.setItem(STORAGE_PREFIX + key, value);
+        return true;
       } catch (e) {
-        console.error('storage set failed', key, e);
+        console.error('localStorage set failed', key, e);
         return false;
       }
     }
     async function storageDelete(key) {
+      if (hasCloudStorage) {
+        try {
+          await window.storage.delete(key, false);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
       try {
-        await window.storage.delete(key, false);
+        localStorage.removeItem(STORAGE_PREFIX + key);
         return true;
       } catch (e) {
         return false;
