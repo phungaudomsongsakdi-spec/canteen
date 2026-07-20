@@ -330,11 +330,16 @@
     </div>
   </header>
 
-  <div id="mode-bar" class="max-w-7xl mx-auto px-4 pt-3 no-print">
+  <div id="mode-bar" class="max-w-7xl mx-auto px-4 pt-3 no-print flex flex-wrap items-center gap-2">
     <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-50/80 text-indigo-700 text-sm font-medium border border-indigo-100/50">
       <span id="mode-icon">👁️</span>
       <span id="mode-text">โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด</span>
     </div>
+    <label id="quick-add-toggle" style="display:none;" class="items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm font-medium select-none">
+      <input type="checkbox" id="quick-add-checkbox" class="accent-emerald-600">
+      <span class="cursor-pointer">⚡ เพิ่มเร็ว (คลิกวางจุดทันที ไม่ต้องกรอกฟอร์ม)</span>
+      <select id="quick-add-type" class="text-xs border border-emerald-300 rounded-lg px-1.5 py-1 bg-white" onclick="event.stopPropagation()"></select>
+    </label>
   </div>
 
   <!-- Stats -->
@@ -482,8 +487,9 @@
           <button onclick="closeModal()" class="flex-1 bg-slate-200 text-slate-700 py-2.5 rounded-xl font-semibold hover:bg-slate-300 transition">ยกเลิก</button>
         </div>
 
-        <div id="delete-area" class="hidden pt-2 border-t border-slate-100">
-          <button onclick="deleteCurrentDevice()" class="w-full bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-xl font-semibold hover:bg-rose-100 transition">🗑️ ลบจุดนี้</button>
+        <div id="delete-area" class="hidden pt-2 border-t border-slate-100 flex gap-3">
+          <button onclick="duplicateCurrentDevice()" class="flex-1 bg-indigo-50 text-indigo-600 border border-indigo-200 py-2.5 rounded-xl font-semibold hover:bg-indigo-100 transition">📋 คัดลอกจุดนี้</button>
+          <button onclick="deleteCurrentDevice()" class="flex-1 bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-xl font-semibold hover:bg-rose-100 transition">🗑️ ลบจุดนี้</button>
         </div>
       </div>
     </div>
@@ -708,12 +714,11 @@
       });
     }
 
-    function populateTypeSelect() {
-      const select = document.getElementById('modal-type');
+    function populateSelectWithTypes(select, fallback) {
       if (!select) return;
       const currentVal = select.value;
-      select.innerHTML = '';
       const allTypes = getDeviceTypes();
+      select.innerHTML = '';
       Object.entries(allTypes).forEach(([name, emoji]) => {
         const opt = document.createElement('option');
         opt.value = name;
@@ -721,7 +726,12 @@
         select.appendChild(opt);
       });
       if (currentVal && allTypes[currentVal]) select.value = currentVal;
-      else select.value = 'หลอดไฟ';
+      else if (fallback) select.value = fallback;
+    }
+
+    function populateTypeSelect() {
+      populateSelectWithTypes(document.getElementById('modal-type'), 'หลอดไฟ');
+      populateSelectWithTypes(document.getElementById('quick-add-type'), 'หลอดไฟ');
       updateModalIcon();
     }
 
@@ -1005,6 +1015,9 @@
       text.textContent = cfg.text;
       bar.className = `inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-medium border ${cfg.cls}`;
       if (mode !== 'view') svg.classList.add('mode-' + mode);
+
+      const quickToggle = document.getElementById('quick-add-toggle');
+      if (quickToggle) quickToggle.style.display = (mode === 'add') ? 'inline-flex' : 'none';
     }
 
     // ============================================================
@@ -1044,10 +1057,33 @@
       if (currentMode !== 'add') return;
       if (e.target.closest('.device-group')) return;
       const pt = getSVGPoint(e);
-      tempCoords = { x: Math.round(pt.x), y: Math.round(pt.y) };
-      isCreating = true;
-      openModalCreate();
+      const coords = { x: Math.round(pt.x), y: Math.round(pt.y) };
+
+      const quickAdd = document.getElementById('quick-add-checkbox');
+      if (quickAdd && quickAdd.checked) {
+        quickCreateDevice(coords);
+      } else {
+        tempCoords = coords;
+        isCreating = true;
+        openModalCreate();
+      }
     });
+
+    // เพิ่มจุดทันทีโดยไม่เปิดฟอร์ม ใช้สำหรับวางจุดจำนวนมากรวดเดียว
+    async function quickCreateDevice(coords) {
+      const typeSelect = document.getElementById('quick-add-type');
+      const type = (typeSelect && typeSelect.value) ? typeSelect.value : 'หลอดไฟ';
+      const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
+      const now = new Date().toISOString();
+      devices.push({
+        id: newId, name: `อุปกรณ์ ${newId}`, type, location: '',
+        x: coords.x, y: coords.y, status: 'normal', note: '',
+        size: 18, offsetX: 0, offsetY: 0, rotate: 0,
+        createdAt: now, updatedAt: now
+      });
+      await saveData();
+      showUploadStatus(`⚡ เพิ่มจุดแล้ว (รวม ${devices.length} จุด) คลิกต่อได้เลย`, 'success');
+    }
 
     // ============================================================
     // DRAG - ย้ายจุด (ใช้ pointer events เพื่อรองรับสัมผัสด้วย)
@@ -1219,6 +1255,18 @@
       await saveData();
       closeModal();
       showUploadStatus('💾 บันทึกข้อมูลเรียบร้อย', 'success');
+    }
+
+    async function duplicateCurrentDevice() {
+      if (currentDeviceId === null) return;
+      const device = devices.find(d => d.id === currentDeviceId);
+      if (!device) return;
+      const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
+      const now = new Date().toISOString();
+      const copy = { ...device, id: newId, x: device.x + 40, y: device.y + 40, createdAt: now, updatedAt: now };
+      devices.push(copy);
+      await saveData();
+      showUploadStatus(`📋 คัดลอกจุดแล้ว (รวม ${devices.length} จุด) กดคัดลอกซ้ำได้ แล้วปิดหน้าต่างเพื่อลากจุดใหม่ไปวาง`, 'success');
     }
 
     function deleteCurrentDevice() {
