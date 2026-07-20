@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -920,36 +921,6 @@
         icon.setAttribute('style', `font-size: ${size * 1.15}px;`);
         icon.textContent = allTypes[device.type] || '🔧';
         g.appendChild(icon);
-
-        const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        const labelText = `${statusEmojis[device.status] || ''} ${device.name || 'อุปกรณ์'}`;
-        const labelWidth = Math.max(labelText.length * 12, 120);
-        labelBg.setAttribute('x', size + 8);
-        labelBg.setAttribute('y', '-18');
-        labelBg.setAttribute('width', labelWidth);
-        labelBg.setAttribute('height', '36');
-        labelBg.setAttribute('rx', '8');
-        labelBg.setAttribute('fill', 'rgba(255,255,255,0.95)');
-        labelBg.setAttribute('stroke', statusColors[device.status] || '#e2e8f0');
-        labelBg.setAttribute('stroke-width', '1.5');
-        labelBg.setAttribute('class', 'label-bg');
-        g.appendChild(labelBg);
-
-        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        label.setAttribute('x', size + 16);
-        label.setAttribute('y', '1');
-        label.setAttribute('style', 'font-size: 13px; fill: #0f172a; font-weight: 600;');
-        label.textContent = labelText;
-        g.appendChild(label);
-
-        if (device.location) {
-          const sublabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          sublabel.setAttribute('x', size + 16);
-          sublabel.setAttribute('y', '16');
-          sublabel.setAttribute('style', 'font-size: 11px; fill: #64748b;');
-          sublabel.textContent = device.location;
-          g.appendChild(sublabel);
-        }
 
         layer.appendChild(g);
       });
