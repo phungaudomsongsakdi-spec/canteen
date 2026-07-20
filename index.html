@@ -4,23 +4,43 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ระบบจัดการเลย์เอาต์เครื่องใช้ไฟฟ้า</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">
+  </script>
   <!-- SheetJS (XLSX) for Excel export -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js">
+  </script>
   <!-- html2canvas + jsPDF for PDF export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-    * { box-sizing: border-box; }
-    body { font-family: 'Prompt', sans-serif; background: #f1f5f9; }
 
-    .device-group { cursor: pointer; transition: filter 0.15s; }
-    .device-group:hover { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25)); }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Prompt', sans-serif;
+      background: #f1f5f9;
+    }
+
+    .device-group {
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .device-group:hover {
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
+    }
     .device-group text,
     .device-group rect,
-    .device-group .label-bg { pointer-events: none; }
-    .device-group .click-area { pointer-events: all; cursor: pointer; }
+    .device-group .label-bg {
+      pointer-events: none;
+    }
+    .device-group .click-area {
+      pointer-events: all;
+      cursor: pointer;
+    }
 
     .map-container {
       overflow: auto;
@@ -31,20 +51,47 @@
       transition: box-shadow 0.3s;
       min-height: 500px;
     }
-    .map-container:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+    .map-container:hover {
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
 
-    .mode-add { cursor: crosshair; }
-    .mode-delete { cursor: not-allowed; }
-    .mode-drag { cursor: grab; }
-    .mode-add .device-group { cursor: crosshair; }
-    .mode-delete .device-group { cursor: pointer; }
-    .mode-drag .device-group { cursor: grab; }
-    .dragging { cursor: grabbing !important; }
+    .mode-add {
+      cursor: crosshair;
+    }
+    .mode-delete {
+      cursor: not-allowed;
+    }
+    .mode-drag {
+      cursor: grab;
+    }
+    .mode-add .device-group {
+      cursor: crosshair;
+    }
+    .mode-delete .device-group {
+      cursor: pointer;
+    }
+    .mode-drag .device-group {
+      cursor: grab;
+    }
+    .dragging {
+      cursor: grabbing !important;
+    }
 
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
 
     .zoom-controls {
       position: sticky;
@@ -57,7 +104,7 @@
       background: white;
       padding: 8px 14px;
       border-radius: 40px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
       border: 1px solid #e2e8f0;
       margin-top: 10px;
       backdrop-filter: blur(4px);
@@ -77,7 +124,10 @@
       align-items: center;
       justify-content: center;
     }
-    .zoom-controls button:hover { background: #e2e8f0; transform: scale(1.05); }
+    .zoom-controls button:hover {
+      background: #e2e8f0;
+      transform: scale(1.05);
+    }
     .zoom-controls span {
       display: inline-block;
       min-width: 52px;
@@ -108,7 +158,9 @@
       justify-content: center;
       animation: fadeIn 0.25s ease;
     }
-    .modal-overlay.active { display: flex; }
+    .modal-overlay.active {
+      display: flex;
+    }
     .modal-content {
       background: white;
       border-radius: 24px;
@@ -116,19 +168,66 @@
       width: 100%;
       max-height: 92vh;
       overflow-y: auto;
-      box-shadow: 0 25px 80px rgba(0,0,0,0.3);
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
       animation: slideUp 0.3s ease;
     }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
 
-    .status-btn { transition: all 0.2s; font-weight: 500; }
-    .status-btn.active-normal { border-color: #10b981; background: #ecfdf5; color: #065f46; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
-    .status-btn.active-broken { border-color: #f43f5e; background: #fef2f2; color: #9f1239; box-shadow: 0 0 0 2px rgba(244,63,94,0.2); }
-    .status-btn.active-pending { border-color: #f59e0b; background: #fffbeb; color: #92400e; box-shadow: 0 0 0 2px rgba(245,158,11,0.2); }
-    .status-btn.active-fixed { border-color: #3b82f6; background: #eff6ff; color: #1e40af; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
-    .status-btn.inactive { border-color: #e2e8f0; color: #64748b; background: white; }
-    .status-btn.inactive:hover { border-color: #94a3b8; background: #f8fafc; transform: translateY(-1px); }
+    .status-btn {
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .status-btn.active-normal {
+      border-color: #10b981;
+      background: #ecfdf5;
+      color: #065f46;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    }
+    .status-btn.active-broken {
+      border-color: #f43f5e;
+      background: #fef2f2;
+      color: #9f1239;
+      box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.2);
+    }
+    .status-btn.active-pending {
+      border-color: #f59e0b;
+      background: #fffbeb;
+      color: #92400e;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    }
+    .status-btn.active-fixed {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      color: #1e40af;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    .status-btn.inactive {
+      border-color: #e2e8f0;
+      color: #64748b;
+      background: white;
+    }
+    .status-btn.inactive:hover {
+      border-color: #94a3b8;
+      background: #f8fafc;
+      transform: translateY(-1px);
+    }
 
     .upload-status {
       position: fixed;
@@ -140,27 +239,55 @@
       font-weight: 600;
       z-index: 100;
       display: none;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
       font-size: 15px;
       max-width: 92%;
       text-align: center;
       letter-spacing: 0.3px;
     }
-    .upload-status.show { display: block; animation: slideUp 0.3s ease; }
-    .upload-status.success { background: #10b981; color: white; }
-    .upload-status.error { background: #f43f5e; color: white; }
-    .upload-status.info { background: #3b82f6; color: white; }
+    .upload-status.show {
+      display: block;
+      animation: slideUp 0.3s ease;
+    }
+    .upload-status.success {
+      background: #10b981;
+      color: white;
+    }
+    .upload-status.error {
+      background: #f43f5e;
+      color: white;
+    }
+    .upload-status.info {
+      background: #3b82f6;
+      color: white;
+    }
 
     @media print {
-      .no-print, header, .zoom-controls, #mode-bar, .stats-bar { display: none !important; }
-      body { background: white; }
-      .map-container { box-shadow: none !important; max-height: none; border-radius: 0; }
-      #floorplan { transform: scale(1) !important; }
+      .no-print,
+      header,
+      .zoom-controls,
+      #mode-bar,
+      .stats-bar {
+        display: none !important;
+      }
+      body {
+        background: white;
+      }
+      .map-container {
+        box-shadow: none !important;
+        max-height: none;
+        border-radius: 0;
+      }
+      #floorplan {
+        transform: scale(1) !important;
+      }
     }
 
     /* Print only the report modal when printing-report is active */
     @media print {
-      body.printing-report > *:not(#report-modal) { display: none !important; }
+      body.printing-report>*:not(#report-modal) {
+        display: none !important;
+      }
       body.printing-report #report-modal {
         position: static !important;
         background: none !important;
@@ -177,9 +304,18 @@
       }
     }
 
-    .header-btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
-    .header-btn-group button, .header-btn-group label { white-space: nowrap; }
-    .min-w-900 { min-width: 900px; }
+    .header-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .header-btn-group button,
+    .header-btn-group label {
+      white-space: nowrap;
+    }
+    .min-w-900 {
+      min-width: 900px;
+    }
 
     .device-group.dragging-active circle:first-of-type {
       stroke: #6366f1;
@@ -197,10 +333,13 @@
       z-index: 200;
       display: none;
       white-space: nowrap;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
-    .device-group.highlight circle { stroke: #f59e0b; stroke-width: 5; }
+    .device-group.highlight circle {
+      stroke: #f59e0b;
+      stroke-width: 5;
+    }
 
     #modal-location-input {
       width: 100%;
@@ -210,7 +349,11 @@
       font-size: 14px;
       font-family: 'Prompt', sans-serif;
     }
-    #modal-location-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+    #modal-location-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
 
     /* Custom type management */
     .custom-type-item {
@@ -233,7 +376,9 @@
       font-size: 15px;
       line-height: 1;
     }
-    .custom-type-item .del-type:hover { color: #b91c1c; }
+    .custom-type-item .del-type:hover {
+      color: #b91c1c;
+    }
 
     /* A4 size control */
     .a4-control {
@@ -245,9 +390,21 @@
       border-radius: 30px;
       border: 1px solid #e2e8f0;
     }
-    .a4-control label { font-size: 13px; font-weight: 500; color: #475569; }
-    .a4-control input[type="range"] { width: 100px; accent-color: #6366f1; }
-    .a4-control span { font-size: 13px; font-weight: 600; color: #1e293b; min-width: 40px; }
+    .a4-control label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #475569;
+    }
+    .a4-control input[type="range"] {
+      width: 100px;
+      accent-color: #6366f1;
+    }
+    .a4-control span {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e293b;
+      min-width: 40px;
+    }
 
     /* PDF specific - hide scrollbar while capturing */
     .pdf-capture .map-container {
@@ -261,20 +418,68 @@
       display: none !important;
     }
 
-    .report-table th { background:#f1f5f9; }
-    .report-table td, .report-table th { border-bottom: 1px solid #f1f5f9; }
+    .report-table th {
+      background: #f1f5f9;
+    }
+    .report-table td,
+    .report-table th {
+      border-bottom: 1px solid #f1f5f9;
+    }
 
     .loading-spinner {
       display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,0.4);
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
       border-top-color: white;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       margin-right: 6px;
       vertical-align: -2px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ปรับขนาดฟอนต์และ padding ของรายงานให้เล็กลง */
+    #report-body .report-table th,
+    #report-body .report-table td {
+      font-size: 0.7rem;
+      padding: 4px 6px;
+    }
+    #report-body .grid .rounded-xl {
+      padding: 6px 8px;
+    }
+    #report-body .grid .text-2xl {
+      font-size: 1.2rem;
+    }
+    #report-body .grid .text-xs {
+      font-size: 0.6rem;
+    }
+    #report-body .text-sm {
+      font-size: 0.7rem;
+    }
+    #report-body .text-xl {
+      font-size: 0.9rem;
+    }
+
+    /* ซ่อนวงกลมศูนย์กลาง (สีเขียว) */
+    .device-group circle[fill="#10b981"],
+    .device-group circle[fill="#f43f5e"],
+    .device-group circle[fill="#f59e0b"],
+    .device-group circle[fill="#3b82f6"] {
+      display: none;
+    }
+    /* เก็บ glow effect สำหรับสถานะเสีย แต่ซ่อนวงกลมหลัก */
+    .device-group circle[fill="#f43f5e"][opacity="0.25"] {
+      display: block;
+    }
+    /* ซ่อนเงา (filter) ด้วย เพราะมักจะอยู่บนวงกลม */
+    .device-group circle[filter="url(#shadow)"] {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -302,7 +507,7 @@
         <!-- ค้นหา -->
         <div class="relative">
           <input type="text" id="search-input" placeholder="🔍 ค้นหา..." oninput="searchDevices(this.value)"
-            class="pl-3 pr-8 py-1.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36 transition">
+          class="pl-3 pr-8 py-1.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36 transition">
           <button onclick="clearSearch()" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs">✕</button>
         </div>
 
@@ -557,26 +762,36 @@
     // ตัวแปรและค่าคงที่
     // ============================================================
     const baseDeviceTypes = {
-      'หลอดไฟ': '💡', 'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
-      'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹',
-      'เบรกเกอร์': '⚡', 'สัญญาณเตือนไฟไหม้': '🔔', 'อื่นๆ': '🔧'
+      'หลอดไฟ': '💡',
+      'พัดลม': '🌀',
+      'เครื่องปรับอากาศ': '❄️',
+      'เต้าเสียบ': '🔌',
+      'สวิตช์': '🔲',
+      'กล้องวงจรปิด': '📹',
+      'เบรกเกอร์': '⚡',
+      'สัญญาณเตือนไฟไหม้': '🔔',
+      'อื่นๆ': '🔧'
     };
     let customTypes = {};
 
-    const statusColors  = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
-    const statusLabels  = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
-    const statusEmojis  = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
+    const statusColors = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
+    const statusLabels = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
+    const statusEmojis = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
 
-    let devices       = [];
+    let devices = [];
     let planImageData = null;
-    let currentMode   = 'view';
+    let currentMode = 'view';
     let currentDeviceId = null;
-    let isCreating    = false;
-    let tempCoords    = null;
-    let zoomLevel     = 1;
-    const MIN_ZOOM = 0.3, MAX_ZOOM = 3;
+    let isCreating = false;
+    let tempCoords = null;
+    let zoomLevel = 1;
+    const MIN_ZOOM = 0.3,
+      MAX_ZOOM = 3;
 
-    let dragTarget = null, dragOffsetX = 0, dragOffsetY = 0, isDragging = false;
+    let dragTarget = null,
+      dragOffsetX = 0,
+      dragOffsetY = 0,
+      isDragging = false;
     let a4Scale = 1.0;
 
     // ============================================================
@@ -597,7 +812,7 @@
           const res = await window.storage.get(key, false);
           return res ? res.value : null;
         } catch (e) {
-          return null; // key ยังไม่มี หรือดึงข้อมูลล้มเหลว
+          return null;
         }
       }
       try {
@@ -606,6 +821,7 @@
         return null;
       }
     }
+
     async function storageSet(key, value) {
       if (hasCloudStorage) {
         try {
@@ -624,6 +840,7 @@
         return false;
       }
     }
+
     async function storageDelete(key) {
       if (hasCloudStorage) {
         try {
@@ -650,11 +867,16 @@
     function defaultDevices() {
       const now = new Date().toISOString();
       return [
-        { id:1, name:'หลอดไฟ ห้องประชุม', type:'หลอดไฟ',            location:'ห้องประชุม', x:1000, y:500, status:'normal',  note:'',                size:18, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:2, name:'พัดลมเพดาน 1',       type:'พัดลม',             location:'ห้องรับรอง', x:1800, y:300, status:'broken',  note:'พัดลมมีเสียงดัง',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:3, name:'แอร์ห้องประชุม',     type:'เครื่องปรับอากาศ', location:'ห้องประชุม', x:2200, y:400, status:'pending', note:'รอช่างมาตรวจ',     size:24, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:4, name:'กล้อง CCTV 1',       type:'กล้องวงจรปิด',      location:'ทางเข้า',    x:600,  y:200, status:'normal',  note:'',                size:20, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
-        { id:5, name:'เบรกเกอร์หลัก',      type:'เบรกเกอร์',         location:'ห้องไฟฟ้า', x:3000, y:800, status:'fixed',   note:'เปลี่ยนใหม่แล้ว',  size:22, offsetX:0, offsetY:0, rotate:0, createdAt: now, updatedAt: now },
+        { id: 1, name: 'หลอดไฟ ห้องประชุม', type: 'หลอดไฟ', location: 'ห้องประชุม', x: 1000, y: 500, status: 'normal',
+          note: '', size: 18, offsetX: 0, offsetY: 0, rotate: 0, createdAt: now, updatedAt: now },
+        { id: 2, name: 'พัดลมเพดาน 1', type: 'พัดลม', location: 'ห้องรับรอง', x: 1800, y: 300, status: 'broken',
+          note: 'พัดลมมีเสียงดัง', size: 22, offsetX: 0, offsetY: 0, rotate: 0, createdAt: now, updatedAt: now },
+        { id: 3, name: 'แอร์ห้องประชุม', type: 'เครื่องปรับอากาศ', location: 'ห้องประชุม', x: 2200, y: 400, status: 'pending',
+          note: 'รอช่างมาตรวจ', size: 24, offsetX: 0, offsetY: 0, rotate: 0, createdAt: now, updatedAt: now },
+        { id: 4, name: 'กล้อง CCTV 1', type: 'กล้องวงจรปิด', location: 'ทางเข้า', x: 600, y: 200, status: 'normal',
+          note: '', size: 20, offsetX: 0, offsetY: 0, rotate: 0, createdAt: now, updatedAt: now },
+        { id: 5, name: 'เบรกเกอร์หลัก', type: 'เบรกเกอร์', location: 'ห้องไฟฟ้า', x: 3000, y: 800, status: 'fixed',
+          note: 'เปลี่ยนใหม่แล้ว', size: 22, offsetX: 0, offsetY: 0, rotate: 0, createdAt: now, updatedAt: now },
       ];
     }
 
@@ -670,8 +892,8 @@
 
       const devicesRaw = await storageGet('devices');
       if (devicesRaw) {
-        try { devices = JSON.parse(devicesRaw); if (!Array.isArray(devices)) devices = defaultDevices(); }
-        catch (e) { devices = defaultDevices(); }
+        try { devices = JSON.parse(devicesRaw);
+          if (!Array.isArray(devices)) devices = defaultDevices(); } catch (e) { devices = defaultDevices(); }
       } else {
         devices = defaultDevices();
       }
@@ -719,7 +941,8 @@
       Object.entries(customTypes).forEach(([name, emoji]) => {
         const span = document.createElement('span');
         span.className = 'custom-type-item';
-        span.innerHTML = `${escapeHtml(emoji)} ${escapeHtml(name)} <button class="del-type" type="button">×</button>`;
+        span.innerHTML =
+          `${escapeHtml(emoji)} ${escapeHtml(name)} <button class="del-type" type="button">×</button>`;
         span.querySelector('.del-type').addEventListener('click', () => removeCustomType(name));
         container.appendChild(span);
       });
@@ -740,7 +963,8 @@
       entries.forEach(([name, emoji]) => {
         const span = document.createElement('span');
         span.className = 'custom-type-item';
-        span.innerHTML = `${escapeHtml(emoji)} ${escapeHtml(name)} <button class="del-type" type="button">×</button>`;
+        span.innerHTML =
+          `${escapeHtml(emoji)} ${escapeHtml(name)} <button class="del-type" type="button">×</button>`;
         span.querySelector('.del-type').addEventListener('click', () => removeCustomType(name));
         list.appendChild(span);
       });
@@ -771,6 +995,7 @@
       document.getElementById('type-manager-modal').classList.add('active');
       renderCustomTypeList();
     }
+
     function closeTypeManager() {
       document.getElementById('type-manager-modal').classList.remove('active');
     }
@@ -805,8 +1030,10 @@
     function uploadPlan(event) {
       const file = event.target.files[0];
       if (!file) return;
-      if (!file.type.startsWith('image/')) { showUploadStatus('❌ กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error'); event.target.value=''; return; }
-      if (file.size > 25 * 1024 * 1024) { showUploadStatus('❌ ไฟล์ใหญ่เกิน 25MB', 'error'); event.target.value=''; return; }
+      if (!file.type.startsWith('image/')) { showUploadStatus('❌ กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
+        event.target.value = ''; return; }
+      if (file.size > 25 * 1024 * 1024) { showUploadStatus('❌ ไฟล์ใหญ่เกิน 25MB', 'error');
+        event.target.value = ''; return; }
       showUploadStatus('⏳ กำลังประมวลผลรูปภาพ...', 'info');
 
       const reader = new FileReader();
@@ -902,11 +1129,13 @@
     function askConfirm(message, onYes) {
       document.getElementById('confirm-message').textContent = message;
       const yesBtn = document.getElementById('confirm-yes');
-      const freshBtn = yesBtn.cloneNode(true); // ล้าง listener เดิม
+      const freshBtn = yesBtn.cloneNode(true);
       yesBtn.parentNode.replaceChild(freshBtn, yesBtn);
-      freshBtn.addEventListener('click', () => { closeConfirm(); onYes(); });
+      freshBtn.addEventListener('click', () => { closeConfirm();
+        onYes(); });
       document.getElementById('confirm-modal').classList.add('active');
     }
+
     function closeConfirm() {
       document.getElementById('confirm-modal').classList.remove('active');
     }
@@ -922,12 +1151,13 @@
         g.setAttribute('class', 'device-group');
         g.setAttribute('data-id', device.id);
 
-        const size    = device.size    || 18;
+        const size = device.size || 18;
         const offsetX = device.offsetX || 0;
         const offsetY = device.offsetY || 0;
-        const rotate  = device.rotate  || 0;
+        const rotate = device.rotate || 0;
 
-        g.setAttribute('transform', `translate(${device.x + offsetX}, ${device.y + offsetY}) rotate(${rotate})`);
+        g.setAttribute('transform',
+          `translate(${device.x + offsetX}, ${device.y + offsetY}) rotate(${rotate})`);
 
         const clickArea = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         clickArea.setAttribute('r', Math.max(size + 14, 32));
@@ -938,6 +1168,7 @@
         clickArea.addEventListener('mouseleave', hideTooltip);
         g.appendChild(clickArea);
 
+        // เอา glow ออกถ้าไม่ต้องการ แต่ยังเก็บไว้เผื่อ
         if (device.status === 'broken') {
           const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           glow.setAttribute('r', size + 10);
@@ -947,6 +1178,7 @@
           g.appendChild(glow);
         }
 
+        // *** วงกลมหลักถูกซ่อนด้วย CSS ***
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('r', size);
         circle.setAttribute('fill', statusColors[device.status] || '#94a3b8');
@@ -975,15 +1207,18 @@
       if (!device) return;
       const tip = document.getElementById('svgTooltip');
       const allTypes = getDeviceTypes();
-      tip.innerHTML = `<strong>${allTypes[device.type] || '🔧'} ${escapeHtml(device.name)}</strong><br>${escapeHtml(device.location || '')} ${statusEmojis[device.status]} ${statusLabels[device.status]}${device.note ? '<br>📝 ' + escapeHtml(device.note) : ''}`;
+      tip.innerHTML =
+        `<strong>${allTypes[device.type] || '🔧'} ${escapeHtml(device.name)}</strong><br>${escapeHtml(device.location || '')} ${statusEmojis[device.status]} ${statusLabels[device.status]}${device.note ? '<br>📝 ' + escapeHtml(device.note) : ''}`;
       tip.style.display = 'block';
       tip.style.left = (event.clientX + 14) + 'px';
-      tip.style.top  = (event.clientY - 10) + 'px';
+      tip.style.top = (event.clientY - 10) + 'px';
     }
+
     function hideTooltip() { document.getElementById('svgTooltip').style.display = 'none'; }
     document.addEventListener('mousemove', e => {
       const tip = document.getElementById('svgTooltip');
-      if (tip.style.display === 'block') { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY - 10) + 'px'; }
+      if (tip.style.display === 'block') { tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY - 10) + 'px'; }
     });
 
     // ============================================================
@@ -992,11 +1227,11 @@
     function updateStats() {
       const counts = { normal: 0, broken: 0, pending: 0, fixed: 0 };
       devices.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
-      document.getElementById('stat-total').textContent   = devices.length;
-      document.getElementById('stat-normal').textContent  = counts.normal;
-      document.getElementById('stat-broken').textContent  = counts.broken;
+      document.getElementById('stat-total').textContent = devices.length;
+      document.getElementById('stat-normal').textContent = counts.normal;
+      document.getElementById('stat-broken').textContent = counts.broken;
       document.getElementById('stat-pending').textContent = counts.pending;
-      document.getElementById('stat-fixed').textContent   = counts.fixed;
+      document.getElementById('stat-fixed').textContent = counts.fixed;
     }
 
     // ============================================================
@@ -1008,39 +1243,43 @@
         const id = parseInt(g.getAttribute('data-id'));
         const d = devices.find(x => x.id === id);
         if (!d) return;
-        const match = !q || d.name.toLowerCase().includes(q) || (d.location||'').toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
+        const match = !q || d.name.toLowerCase().includes(q) || (d.location || '').toLowerCase().includes(q) || d.type
+          .toLowerCase().includes(q);
         g.classList.toggle('highlight', !!(q && match));
         g.style.opacity = (!q || match) ? '1' : '0.25';
       });
     }
-    function clearSearch() { document.getElementById('search-input').value = ''; searchDevices(''); }
+
+    function clearSearch() { document.getElementById('search-input').value = '';
+      searchDevices(''); }
 
     // ============================================================
     // โหมด
     // ============================================================
     function setMode(mode) {
       currentMode = mode;
-      const modeIds = ['view','add','delete','drag'];
+      const modeIds = ['view', 'add', 'delete', 'drag'];
       modeIds.forEach(m => {
         const btn = document.getElementById('mode-' + m);
         if (!btn) return;
-        btn.className = (m === mode)
-          ? 'px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition'
-          : 'px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition';
+        btn.className = (m === mode) ?
+          'px-3 py-1.5 text-sm rounded-lg bg-white shadow-sm text-indigo-700 font-medium transition' :
+          'px-3 py-1.5 text-sm rounded-lg text-slate-600 hover:bg-white/60 transition';
       });
 
       const svg = document.getElementById('floorplan');
-      svg.classList.remove('mode-add','mode-delete','mode-drag');
+      svg.classList.remove('mode-add', 'mode-delete', 'mode-drag');
 
       const icon = document.getElementById('mode-icon');
       const text = document.getElementById('mode-text');
-      const bar  = document.getElementById('mode-bar').firstElementChild;
+      const bar = document.getElementById('mode-bar').firstElementChild;
 
       const configs = {
-        view:   { icon:'👁️', text:'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด', cls:'bg-indigo-50/80 text-indigo-700 border-indigo-100/50' },
-        add:    { icon:'➕', text:'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์', cls:'bg-emerald-50/80 text-emerald-700 border-emerald-100/50' },
-        delete: { icon:'🗑️', text:'โหมดลบจุด: คลิกที่จุดเพื่อลบ (จะมีข้อความให้ยืนยันก่อนลบ)', cls:'bg-rose-50/80 text-rose-700 border-rose-100/50' },
-        drag:   { icon:'✋', text:'โหมดย้ายจุด: ลากจุดเพื่อเปลี่ยนตำแหน่ง', cls:'bg-amber-50/80 text-amber-700 border-amber-100/50' },
+        view: { icon: '👁️', text: 'โหมดดู/แก้ไข: คลิกที่จุดเพื่อดูรายละเอียด', cls: 'bg-indigo-50/80 text-indigo-700 border-indigo-100/50' },
+        add: { icon: '➕', text: 'โหมดเพิ่มจุด: คลิกบนแผนผังเพื่อเพิ่มอุปกรณ์', cls: 'bg-emerald-50/80 text-emerald-700 border-emerald-100/50' },
+        delete: { icon: '🗑️', text: 'โหมดลบจุด: คลิกที่จุดเพื่อลบ (จะมีข้อความให้ยืนยันก่อนลบ)',
+          cls: 'bg-rose-50/80 text-rose-700 border-rose-100/50' },
+        drag: { icon: '✋', text: 'โหมดย้ายจุด: ลากจุดเพื่อเปลี่ยนตำแหน่ง', cls: 'bg-amber-50/80 text-amber-700 border-amber-100/50' },
       };
       const cfg = configs[mode] || configs.view;
       icon.textContent = cfg.icon;
@@ -1060,14 +1299,21 @@
       document.getElementById('floorplan').style.transform = `scale(${totalScale})`;
       document.getElementById('zoomLevel').textContent = Math.round(totalScale * 100) + '%';
     }
-    function zoomIn()    { if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1); applyZoom(); } }
-    function zoomOut()   { if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1); applyZoom(); } }
-    function resetZoom() { zoomLevel = 1; applyZoom(); }
+
+    function zoomIn() { if (zoomLevel < MAX_ZOOM) { zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1);
+        applyZoom(); } }
+
+    function zoomOut() { if (zoomLevel > MIN_ZOOM) { zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1);
+        applyZoom(); } }
+
+    function resetZoom() { zoomLevel = 1;
+      applyZoom(); }
 
     document.getElementById('mapContainer').addEventListener('wheel', function(e) {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        if (e.deltaY < 0) zoomIn(); else zoomOut();
+        if (e.deltaY < 0) zoomIn();
+        else zoomOut();
       }
     }, { passive: false });
 
@@ -1076,7 +1322,7 @@
     // ============================================================
     function getSVGPoint(event) {
       const svg = document.getElementById('floorplan');
-      const pt  = svg.createSVGPoint();
+      const pt = svg.createSVGPoint();
       pt.x = event.clientX;
       pt.y = event.clientY;
       return pt.matrixTransform(svg.getScreenCTM().inverse());
@@ -1108,10 +1354,20 @@
       const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
       const now = new Date().toISOString();
       devices.push({
-        id: newId, name: `อุปกรณ์ ${newId}`, type, location: '',
-        x: coords.x, y: coords.y, status: 'normal', note: '',
-        size: 18, offsetX: 0, offsetY: 0, rotate: 0,
-        createdAt: now, updatedAt: now
+        id: newId,
+        name: `อุปกรณ์ ${newId}`,
+        type,
+        location: '',
+        x: coords.x,
+        y: coords.y,
+        status: 'normal',
+        note: '',
+        size: 18,
+        offsetX: 0,
+        offsetY: 0,
+        rotate: 0,
+        createdAt: now,
+        updatedAt: now
       });
       await saveData();
       showUploadStatus(`⚡ เพิ่มจุดแล้ว (รวม ${devices.length} จุด) คลิกต่อได้เลย`, 'success');
@@ -1126,24 +1382,25 @@
       if (!grp) return;
       e.preventDefault();
       dragTarget = parseInt(grp.getAttribute('data-id'));
-      const pt   = getSVGPoint(e);
-      const dev  = devices.find(d => d.id === dragTarget);
+      const pt = getSVGPoint(e);
+      const dev = devices.find(d => d.id === dragTarget);
       if (!dev) return;
-      dragOffsetX = pt.x - (dev.x + (dev.offsetX||0));
-      dragOffsetY = pt.y - (dev.y + (dev.offsetY||0));
-      isDragging  = true;
+      dragOffsetX = pt.x - (dev.x + (dev.offsetX || 0));
+      dragOffsetY = pt.y - (dev.y + (dev.offsetY || 0));
+      isDragging = true;
       grp.classList.add('dragging-active');
       document.body.style.userSelect = 'none';
     });
     document.addEventListener('pointermove', function(e) {
       if (!isDragging || dragTarget === null) return;
-      const pt  = getSVGPoint(e);
+      const pt = getSVGPoint(e);
       const dev = devices.find(d => d.id === dragTarget);
       if (!dev) return;
-      dev.x = Math.round(pt.x - dragOffsetX - (dev.offsetX||0));
-      dev.y = Math.round(pt.y - dragOffsetY - (dev.offsetY||0));
+      dev.x = Math.round(pt.x - dragOffsetX - (dev.offsetX || 0));
+      dev.y = Math.round(pt.y - dragOffsetY - (dev.offsetY || 0));
       const grp = document.querySelector(`.device-group[data-id="${dragTarget}"]`);
-      if (grp) grp.setAttribute('transform', `translate(${dev.x + (dev.offsetX||0)}, ${dev.y + (dev.offsetY||0)}) rotate(${dev.rotate||0})`);
+      if (grp) grp.setAttribute('transform',
+        `translate(${dev.x + (dev.offsetX||0)}, ${dev.y + (dev.offsetY||0)}) rotate(${dev.rotate||0})`);
     });
     document.addEventListener('pointerup', async function() {
       if (!isDragging) return;
@@ -1193,19 +1450,19 @@
       currentDeviceId = null;
       isCreating = true;
       document.getElementById('modal-title').textContent = '➕ เพิ่มอุปกรณ์ใหม่';
-      document.getElementById('modal-name').textContent  = 'จุดใหม่';
+      document.getElementById('modal-name').textContent = 'จุดใหม่';
       document.getElementById('modal-location').textContent = `📍 พิกัด: ${tempCoords.x}, ${tempCoords.y}`;
-      document.getElementById('modal-icon').textContent  = '💡';
-      document.getElementById('modal-name-input').value  = `อุปกรณ์ ${devices.length + 1}`;
-      document.getElementById('modal-type').value        = 'หลอดไฟ';
+      document.getElementById('modal-icon').textContent = '💡';
+      document.getElementById('modal-name-input').value = `อุปกรณ์ ${devices.length + 1}`;
+      document.getElementById('modal-type').value = 'หลอดไฟ';
       document.getElementById('modal-location-input').value = '';
-      document.getElementById('modal-note').value        = '';
+      document.getElementById('modal-note').value = '';
       document.getElementById('modal-updated').firstElementChild.textContent = 'สร้างใหม่';
       document.getElementById('modal-coords').textContent = `X:${tempCoords.x} Y:${tempCoords.y}`;
-      document.getElementById('modal-size').value    = 18;
+      document.getElementById('modal-size').value = 18;
       document.getElementById('modal-offset-x').value = 0;
       document.getElementById('modal-offset-y').value = 0;
-      document.getElementById('modal-rotate').value   = 0;
+      document.getElementById('modal-rotate').value = 0;
       document.getElementById('delete-area').classList.add('hidden');
       updateModalStatusButtons('normal');
       populateTypeSelect();
@@ -1218,22 +1475,22 @@
       if (!device) return;
       currentDeviceId = id;
       isCreating = false;
-      document.getElementById('modal-title').textContent   = '✏️ แก้ไขอุปกรณ์';
-      document.getElementById('modal-name').textContent    = device.name;
+      document.getElementById('modal-title').textContent = '✏️ แก้ไขอุปกรณ์';
+      document.getElementById('modal-name').textContent = device.name;
       document.getElementById('modal-location').textContent = `📍 ${device.location || ''} (${Math.round(device.x)}, ${Math.round(device.y)})`;
       const allTypes = getDeviceTypes();
-      document.getElementById('modal-icon').textContent    = allTypes[device.type] || '🔧';
-      document.getElementById('modal-name-input').value    = device.name;
-      document.getElementById('modal-type').value          = device.type || 'หลอดไฟ';
+      document.getElementById('modal-icon').textContent = allTypes[device.type] || '🔧';
+      document.getElementById('modal-name-input').value = device.name;
+      document.getElementById('modal-type').value = device.type || 'หลอดไฟ';
       document.getElementById('modal-location-input').value = device.location || '';
-      document.getElementById('modal-note').value          = device.note || '';
-      document.getElementById('modal-coords').textContent  = `X:${Math.round(device.x)} Y:${Math.round(device.y)}`;
+      document.getElementById('modal-note').value = device.note || '';
+      document.getElementById('modal-coords').textContent = `X:${Math.round(device.x)} Y:${Math.round(device.y)}`;
       const updEl = document.getElementById('modal-updated').firstElementChild;
       updEl.textContent = '🕐 อัปเดต: ' + (device.updatedAt ? new Date(device.updatedAt).toLocaleString('th-TH') : '-');
-      document.getElementById('modal-size').value     = device.size || 18;
+      document.getElementById('modal-size').value = device.size || 18;
       document.getElementById('modal-offset-x').value = device.offsetX || 0;
       document.getElementById('modal-offset-y').value = device.offsetY || 0;
-      document.getElementById('modal-rotate').value   = device.rotate || 0;
+      document.getElementById('modal-rotate').value = device.rotate || 0;
       document.getElementById('delete-area').classList.remove('hidden');
       updateModalStatusButtons(device.status || 'normal');
       populateTypeSelect();
@@ -1243,16 +1500,17 @@
     function closeModal() {
       document.getElementById('device-modal').classList.remove('active');
       currentDeviceId = null;
-      tempCoords  = null;
-      isCreating  = false;
+      tempCoords = null;
+      isCreating = false;
     }
 
     function setStatus(status) { updateModalStatusButtons(status); }
 
     function updateModalStatusButtons(active) {
-      ['normal','broken','pending','fixed'].forEach(status => {
+      ['normal', 'broken', 'pending', 'fixed'].forEach(status => {
         const btn = document.getElementById('btn-' + status);
-        btn.className = `status-btn px-3 py-2.5 rounded-xl border-2 font-medium ${status === active ? 'active-' + status : 'inactive'}`;
+        btn.className =
+          `status-btn px-3 py-2.5 rounded-xl border-2 font-medium ${status === active ? 'active-' + status : 'inactive'}`;
       });
       document.getElementById('device-modal').dataset.status = active;
     }
@@ -1261,22 +1519,35 @@
     // บันทึก
     // ============================================================
     async function saveDevice() {
-      const name     = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
-      const type     = document.getElementById('modal-type').value;
-      const status   = document.getElementById('device-modal').dataset.status || 'normal';
-      const note     = document.getElementById('modal-note').value.trim();
+      const name = document.getElementById('modal-name-input').value.trim() || 'อุปกรณ์';
+      const type = document.getElementById('modal-type').value;
+      const status = document.getElementById('device-modal').dataset.status || 'normal';
+      const note = document.getElementById('modal-note').value.trim();
       const location = document.getElementById('modal-location-input').value.trim();
-      const size     = parseInt(document.getElementById('modal-size').value)    || 18;
-      const offsetX  = parseInt(document.getElementById('modal-offset-x').value) || 0;
-      const offsetY  = parseInt(document.getElementById('modal-offset-y').value) || 0;
-      const rotate   = parseInt(document.getElementById('modal-rotate').value)   || 0;
-      const now      = new Date().toISOString();
+      const size = parseInt(document.getElementById('modal-size').value) || 18;
+      const offsetX = parseInt(document.getElementById('modal-offset-x').value) || 0;
+      const offsetY = parseInt(document.getElementById('modal-offset-y').value) || 0;
+      const rotate = parseInt(document.getElementById('modal-rotate').value) || 0;
+      const now = new Date().toISOString();
 
       if (isCreating && tempCoords) {
         const newId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
-        devices.push({ id:newId, name, type, location, x:tempCoords.x, y:tempCoords.y,
-          status, note, size, offsetX, offsetY, rotate,
-          createdAt: now, updatedAt: now });
+        devices.push({
+          id: newId,
+          name,
+          type,
+          location,
+          x: tempCoords.x,
+          y: tempCoords.y,
+          status,
+          note,
+          size,
+          offsetX,
+          offsetY,
+          rotate,
+          createdAt: now,
+          updatedAt: now
+        });
       } else if (currentDeviceId !== null) {
         const device = devices.find(d => d.id === currentDeviceId);
         if (device) {
@@ -1298,7 +1569,8 @@
       const copy = { ...device, id: newId, x: device.x + 40, y: device.y + 40, createdAt: now, updatedAt: now };
       devices.push(copy);
       await saveData();
-      showUploadStatus(`📋 คัดลอกจุดแล้ว (รวม ${devices.length} จุด) กดคัดลอกซ้ำได้ แล้วปิดหน้าต่างเพื่อลากจุดใหม่ไปวาง`, 'success');
+      showUploadStatus(`📋 คัดลอกจุดแล้ว (รวม ${devices.length} จุด) กดคัดลอกซ้ำได้ แล้วปิดหน้าต่างเพื่อลากจุดใหม่ไปวาง`,
+      'success');
     }
 
     function deleteCurrentDevice() {
@@ -1315,11 +1587,15 @@
     // ปิด Modal (คลิกพื้นหลัง / กด Esc)
     // ============================================================
     document.getElementById('device-modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
-    document.getElementById('type-manager-modal').addEventListener('click', function(e) { if (e.target === this) closeTypeManager(); });
+    document.getElementById('type-manager-modal').addEventListener('click', function(e) { if (e.target === this)
+        closeTypeManager(); });
     document.getElementById('confirm-modal').addEventListener('click', function(e) { if (e.target === this) closeConfirm(); });
     document.getElementById('report-modal').addEventListener('click', function(e) { if (e.target === this) closeReport(); });
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') { closeModal(); closeTypeManager(); closeConfirm(); closeReport(); }
+      if (e.key === 'Escape') { closeModal();
+        closeTypeManager();
+        closeConfirm();
+        closeReport(); }
     });
 
     // ============================================================
@@ -1345,9 +1621,17 @@
       const zoomControls = document.querySelector('.zoom-controls');
       if (zoomControls) zoomControls.style.display = 'none';
 
+      // บันทึกการตั้งค่า A4 scale ปัจจุบันและรีเซ็ตเป็น 1.0 เพื่อให้ได้ภาพเต็ม
+      const currentA4Scale = a4Scale;
+      if (currentA4Scale !== 1.0) {
+        // เปลี่ยนสเกลชั่วคราวเป็น 1.0 เพื่อให้ได้ภาพพอดี A4
+        a4Scale = 1.0;
+        applyZoom();
+      }
+
       setTimeout(() => {
         html2canvas(container, {
-          scale: 1.5,
+          scale: 2.0,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
@@ -1355,6 +1639,11 @@
           width: container.scrollWidth,
           height: container.scrollHeight,
         }).then(canvas => {
+          // คืนค่าสเกลเดิม
+          if (currentA4Scale !== 1.0) {
+            a4Scale = currentA4Scale;
+            applyZoom();
+          }
           container.style.overflow = originalOverflow || 'auto';
           container.style.maxHeight = originalMaxHeight || '72vh';
           document.body.classList.remove('pdf-capture');
@@ -1382,6 +1671,11 @@
           showUploadStatus('📄 ส่งออก PDF สำเร็จ!', 'success');
         }).catch(err => {
           console.error(err);
+          // คืนค่าสเกลเดิมหากเกิด error
+          if (currentA4Scale !== 1.0) {
+            a4Scale = currentA4Scale;
+            applyZoom();
+          }
           container.style.overflow = originalOverflow || 'auto';
           container.style.maxHeight = originalMaxHeight || '72vh';
           document.body.classList.remove('pdf-capture');
@@ -1398,65 +1692,66 @@
     function showReport() {
       if (devices.length === 0) { showUploadStatus('⚠️ ยังไม่มีอุปกรณ์ในระบบ', 'error'); return; }
 
-      const counts = { normal:0, broken:0, pending:0, fixed:0 };
+      const counts = { normal: 0, broken: 0, pending: 0, fixed: 0 };
       devices.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
 
       const byType = {};
-      devices.forEach(d => { if (!byType[d.type]) byType[d.type] = []; byType[d.type].push(d); });
+      devices.forEach(d => { if (!byType[d.type]) byType[d.type] = [];
+        byType[d.type].push(d); });
 
       const allTypes = getDeviceTypes();
       const summaryRows = Object.entries(byType).map(([type, list]) => `
         <tr class="report-table">
-          <td class="py-2 px-3">${allTypes[type]||'🔧'} ${escapeHtml(type)}</td>
-          <td class="py-2 px-3 text-center font-semibold">${list.length}</td>
-          <td class="py-2 px-3 text-center text-emerald-600">${list.filter(d=>d.status==='normal').length}</td>
-          <td class="py-2 px-3 text-center text-rose-600">${list.filter(d=>d.status==='broken').length}</td>
-          <td class="py-2 px-3 text-center text-amber-600">${list.filter(d=>d.status==='pending').length}</td>
-          <td class="py-2 px-3 text-center text-blue-600">${list.filter(d=>d.status==='fixed').length}</td>
+          <td class="py-1 px-2 text-xs">${allTypes[type]||'🔧'} ${escapeHtml(type)}</td>
+          <td class="py-1 px-2 text-center text-xs font-semibold">${list.length}</td>
+          <td class="py-1 px-2 text-center text-xs text-emerald-600">${list.filter(d=>d.status==='normal').length}</td>
+          <td class="py-1 px-2 text-center text-xs text-rose-600">${list.filter(d=>d.status==='broken').length}</td>
+          <td class="py-1 px-2 text-center text-xs text-amber-600">${list.filter(d=>d.status==='pending').length}</td>
+          <td class="py-1 px-2 text-center text-xs text-blue-600">${list.filter(d=>d.status==='fixed').length}</td>
         </tr>`).join('');
 
       const deviceRows = devices.map((d, i) => `
         <tr class="report-table ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
-          <td class="py-2 px-3">${i+1}</td>
-          <td class="py-2 px-3 font-semibold">${escapeHtml(d.name)}</td>
-          <td class="py-2 px-3">${allTypes[d.type]||'🔧'} ${escapeHtml(d.type)}</td>
-          <td class="py-2 px-3">${escapeHtml(d.location || '-')}</td>
-          <td class="py-2 px-3"><span class="px-2.5 py-0.5 rounded-full text-xs font-medium" style="background:${statusColors[d.status]}22;color:${statusColors[d.status]}">${statusEmojis[d.status]} ${statusLabels[d.status]}</span></td>
-          <td class="py-2 px-3">${escapeHtml(d.note || '-')}</td>
-          <td class="py-2 px-3 text-xs text-slate-400">${d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('th-TH') : '-'}</td>
+          <td class="py-1 px-2 text-xs">${i+1}</td>
+          <td class="py-1 px-2 text-xs font-semibold">${escapeHtml(d.name)}</td>
+          <td class="py-1 px-2 text-xs">${allTypes[d.type]||'🔧'} ${escapeHtml(d.type)}</td>
+          <td class="py-1 px-2 text-xs">${escapeHtml(d.location || '-')}</td>
+          <td class="py-1 px-2 text-xs"><span class="px-1.5 py-0.5 rounded-full text-[0.6rem] font-medium" style="background:${statusColors[d.status]}22;color:${statusColors[d.status]}">${statusEmojis[d.status]} ${statusLabels[d.status]}</span></td>
+          <td class="py-1 px-2 text-xs">${escapeHtml(d.note || '-')}</td>
+          <td class="py-1 px-2 text-[0.6rem] text-slate-400">${d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('th-TH') : '-'}</td>
         </tr>`).join('');
 
       const brokenDevices = devices.filter(d => d.status === 'broken' || d.status === 'pending');
       const alertSection = brokenDevices.length > 0 ? `
-        <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-5 text-orange-800 text-sm leading-relaxed">
+        <div class="bg-orange-50 border border-orange-200 rounded-lg p-2 mb-3 text-orange-800 text-xs leading-relaxed">
           ⚠️ <strong>ต้องดำเนินการ ${brokenDevices.length} รายการ:</strong><br>
           ${brokenDevices.map(d => `• ${escapeHtml(d.name)} (${escapeHtml(d.location||'ไม่ระบุ')}) — ${statusLabels[d.status]}`).join('<br>')}
-        </div>` : `<div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 text-green-800 text-sm">✅ ไม่มีอุปกรณ์ที่ต้องดำเนินการ</div>`;
+        </div>` : `<div class="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-green-800 text-xs">✅ ไม่มีอุปกรณ์ที่ต้องดำเนินการ</div>`;
 
       document.getElementById('report-body').innerHTML = `
-        <div class="border-b-2 border-indigo-500 pb-4 mb-5">
-          <h3 class="text-xl font-bold text-slate-800">⚡ รายงานสรุปอุปกรณ์ไฟฟ้า</h3>
-          <div class="text-sm text-slate-500 mt-1">📅 ${new Date().toLocaleString('th-TH')} • จำนวนทั้งหมด: ${devices.length} รายการ</div>
+        <div class="border-b-2 border-indigo-500 pb-2 mb-3">
+          <h3 class="text-base font-bold text-slate-800">⚡ รายงานสรุปอุปกรณ์ไฟฟ้า</h3>
+          <div class="text-xs text-slate-500 mt-0.5">📅 ${new Date().toLocaleString('th-TH')} • จำนวนทั้งหมด: ${devices.length} รายการ</div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-          <div class="bg-slate-50 rounded-xl p-3 text-center border-l-4 border-slate-500"><div class="text-2xl font-bold">${devices.length}</div><div class="text-xs text-slate-500">📌 ทั้งหมด</div></div>
-          <div class="bg-slate-50 rounded-xl p-3 text-center border-l-4 border-emerald-500"><div class="text-2xl font-bold text-emerald-600">${counts.normal}</div><div class="text-xs text-slate-500">✅ ปกติ</div></div>
-          <div class="bg-slate-50 rounded-xl p-3 text-center border-l-4 border-rose-500"><div class="text-2xl font-bold text-rose-600">${counts.broken}</div><div class="text-xs text-slate-500">⚠️ เสีย</div></div>
-          <div class="bg-slate-50 rounded-xl p-3 text-center border-l-4 border-amber-500"><div class="text-2xl font-bold text-amber-600">${counts.pending}</div><div class="text-xs text-slate-500">⏳ รอซ่อม</div></div>
-          <div class="bg-slate-50 rounded-xl p-3 text-center border-l-4 border-blue-500"><div class="text-2xl font-bold text-blue-600">${counts.fixed}</div><div class="text-xs text-slate-500">🔧 ซ่อมแล้ว</div></div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+          <div class="bg-slate-50 rounded-lg p-1.5 text-center border-l-4 border-slate-500"><div class="text-base font-bold">${devices.length}</div><div class="text-[0.6rem] text-slate-500">📌 ทั้งหมด</div></div>
+          <div class="bg-slate-50 rounded-lg p-1.5 text-center border-l-4 border-emerald-500"><div class="text-base font-bold text-emerald-600">${counts.normal}</div><div class="text-[0.6rem] text-slate-500">✅ ปกติ</div></div>
+          <div class="bg-slate-50 rounded-lg p-1.5 text-center border-l-4 border-rose-500"><div class="text-base font-bold text-rose-600">${counts.broken}</div><div class="text-[0.6rem] text-slate-500">⚠️ เสีย</div></div>
+          <div class="bg-slate-50 rounded-lg p-1.5 text-center border-l-4 border-amber-500"><div class="text-base font-bold text-amber-600">${counts.pending}</div><div class="text-[0.6rem] text-slate-500">⏳ รอซ่อม</div></div>
+          <div class="bg-slate-50 rounded-lg p-1.5 text-center border-l-4 border-blue-500"><div class="text-base font-bold text-blue-600">${counts.fixed}</div><div class="text-[0.6rem] text-slate-500">🔧 ซ่อมแล้ว</div></div>
         </div>
         ${alertSection}
-        <div class="text-sm font-bold text-slate-800 border-l-4 border-indigo-500 pl-2 mb-2 mt-6">สรุปตามประเภท</div>
-        <div class="overflow-x-auto mb-6">
-          <table class="w-full text-sm report-table">
-            <thead><tr><th class="text-left py-2 px-3">ประเภท</th><th class="py-2 px-3">รวม</th><th class="py-2 px-3">ปกติ</th><th class="py-2 px-3">เสีย</th><th class="py-2 px-3">รอซ่อม</th><th class="py-2 px-3">ซ่อมแล้ว</th></tr></thead>
+        <div class="text-xs font-bold text-slate-800 border-l-4 border-indigo-500 pl-1.5 mb-1 mt-3">สรุปตามประเภท</div>
+        <div class="overflow-x-auto mb-3">
+          <table class="w-full text-xs report-table">
+            <thead><tr><th class="text-left py-1 px-2 text-xs">ประเภท</th><th class="py-1 px-2 text-xs">รวม</th><th class="py-1 px-2 text-xs">ปกติ</th><th class="py-1 px-2 text-xs">เสีย</th><th class="py-1 px-2 text-xs">รอซ่อม</th><th class="py-1 px-2 text-xs">ซ่อมแล้ว</th></tr></thead>
             <tbody>${summaryRows}</tbody>
           </table>
         </div>
-        <div class="text-sm font-bold text-slate-800 border-l-4 border-indigo-500 pl-2 mb-2">รายการอุปกรณ์ทั้งหมด</div>
+        <div class="text-xs font-bold text-slate-800 border-l-4 border-indigo-500 pl-1.5 mb-1">รายการอุปกรณ์ทั้งหมด</div>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm report-table">
-            <thead><tr><th class="text-left py-2 px-3">#</th><th class="text-left py-2 px-3">ชื่ออุปกรณ์</th><th class="text-left py-2 px-3">ประเภท</th><th class="text-left py-2 px-3">สถานที่</th><th class="text-left py-2 px-3">สถานะ</th><th class="text-left py-2 px-3">หมายเหตุ</th><th class="text-left py-2 px-3">อัปเดต</th></tr></thead>
+          <table class="w-full text-xs report-table">
+            <thead><tr><th class="text-left py-1 px-2 text-xs">#</th><th class="text-left py-1 px-2 text-xs">ชื่ออุปกรณ์</th><th class="text-left py-1 px-2 text-xs">ประเภท</th><th class="text-left py-1 px-2 text-xs">สถานที่</th><th class="text-left py-1 px-2 text-xs">สถานะ</th><th class="text-left py-1 px-2 text-xs">หมายเหตุ</th><th class="text-left py-1 px-2 text-xs">อัปเดต</th></tr></thead>
             <tbody>${deviceRows}</tbody>
           </table>
         </div>
