@@ -424,6 +424,8 @@
           <div class="flex gap-2">
             <select id="modal-type" class="flex-1 border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" onchange="updateModalIcon()">
               <option value="หลอดไฟ">💡 หลอดไฟ</option>
+              <option value="หลอดไฟ (2 ดวง)">💡² หลอดไฟ (2 ดวง)</option>
+              <option value="หลอดไฟ (3 ดวง)">💡³ หลอดไฟ (3 ดวง)</option>
               <option value="พัดลม">🌀 พัดลม</option>
               <option value="เครื่องปรับอากาศ">❄️ เครื่องปรับอากาศ</option>
               <option value="เต้าเสียบ">🔌 เต้าเสียบ</option>
@@ -557,25 +559,22 @@
     // ตัวแปรและค่าคงที่
     // ============================================================
     const baseDeviceTypes = {
-      'หลอดไฟ': '💡', 'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
+      'หลอดไฟ': '💡', 'หลอดไฟ (2 ดวง)': '💡²', 'หลอดไฟ (3 ดวง)': '💡³',
+      'พัดลม': '🌀', 'เครื่องปรับอากาศ': '❄️',
       'เต้าเสียบ': '🔌', 'สวิตช์': '🔲', 'กล้องวงจรปิด': '📹',
       'เบรกเกอร์': '⚡', 'สัญญาณเตือนไฟไหม้': '🔔', 'อื่นๆ': '🔧'
     };
     let customTypes = {};
 
+    // สีเหล่านี้ใช้เฉพาะในตารางรายงาน/ป้ายสถานะเท่านั้น
+    // จุดบนแผนผังไม่ใช้สีแล้ว (แสดงแค่ไอคอน) ตามที่ต้องการ
     const statusColors  = { normal: '#10b981', broken: '#f43f5e', pending: '#f59e0b', fixed: '#3b82f6' };
     const statusLabels  = { normal: 'ปกติ', broken: 'เสีย', pending: 'รอซ่อม', fixed: 'ซ่อมแล้ว' };
     const statusEmojis  = { normal: '✅', broken: '⚠️', pending: '⏳', fixed: '🔧' };
 
-    // สีจุดบนแผนผัง: จุดสถานะ "ปกติ" ใช้สีเทากลาง แทนสีเขียว เพื่อไม่ให้จุดปกติ (ส่วนใหญ่)
-    // แย่งความสนใจจากจุดที่ต้องดำเนินการ (เสีย/รอซ่อม) สีในรายงาน/ป้ายสถานะยังคงเดิม
-    function getMarkerColor(status) {
-      if (status === 'normal') return '#94a3b8';
-      return statusColors[status] || '#94a3b8';
-    }
-
     let devices       = [];
     let planImageData = null;
+    let planImageMeta = null; // { width, height } ขนาดจริงของรูปแปลนที่อัปโหลด ใช้คำนวณพื้นที่จริงตอนส่งออก PDF
     let currentMode   = 'view';
     let currentDeviceId = null;
     let isCreating    = false;
@@ -684,6 +683,8 @@
       }
 
       planImageData = await storageGet('planImage');
+      const metaRaw = await storageGet('planImageMeta');
+      try { planImageMeta = metaRaw ? JSON.parse(metaRaw) : null; } catch (e) { planImageMeta = null; }
       loadPlan();
       render();
       updateStats();
@@ -850,6 +851,9 @@
 
             const ok = await storageSet('planImage', dataUrl);
             if (!ok) { showUploadStatus('❌ บันทึกรูปแปลนล้มเหลว', 'error'); return; }
+            // เก็บสัดส่วนจริงของรูปต้นฉบับไว้ เพื่อคำนวณพื้นที่ที่รูปแสดงจริงตอนส่งออก PDF (ตัดขอบขาวส่วนเกิน)
+            planImageMeta = { width: img.naturalWidth, height: img.naturalHeight };
+            await storageSet('planImageMeta', JSON.stringify(planImageMeta));
             planImageData = dataUrl;
             loadPlan();
             showUploadStatus('✅ อัปโหลดแปลนสำเร็จ!', 'success');
@@ -880,10 +884,59 @@
     function clearPlan() {
       askConfirm('ต้องการลบรูปแปลนพื้นหลัง?', async () => {
         await storageDelete('planImage');
+        await storageDelete('planImageMeta');
         planImageData = null;
+        planImageMeta = null;
         loadPlan();
         showUploadStatus('🗑️ ลบรูปแปลนแล้ว', 'success');
       });
+    }
+
+    // ============================================================
+    // คำนวณขอบเขตพื้นที่ที่มีเนื้อหาจริง (จุดอุปกรณ์ + รูปแปลน)
+    // ใช้ตอนส่งออก PDF เพื่อตัดพื้นที่ว่างส่วนเกินออก ให้รูปเต็มหน้ากระดาษจริง ๆ
+    // ============================================================
+    function computeContentBBox() {
+      const VB_W = 4600, VB_H = 2000;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+      devices.forEach(d => {
+        const size = d.size || 18;
+        const ox = d.offsetX || 0, oy = d.offsetY || 0;
+        const cx = d.x + ox, cy = d.y + oy;
+        const r = Math.max(size + 14, 32);
+        minX = Math.min(minX, cx - r);
+        maxX = Math.max(maxX, cx + r);
+        minY = Math.min(minY, cy - r);
+        maxY = Math.max(maxY, cy + r);
+      });
+
+      if (planImageData && planImageMeta && planImageMeta.width && planImageMeta.height) {
+        const imgAR = planImageMeta.width / planImageMeta.height;
+        const boxAR = VB_W / VB_H;
+        let rw, rh, rox, roy;
+        if (imgAR > boxAR) {
+          rw = VB_W; rh = VB_W / imgAR; rox = 0; roy = (VB_H - rh) / 2;
+        } else {
+          rh = VB_H; rw = VB_H * imgAR; roy = 0; rox = (VB_W - rw) / 2;
+        }
+        minX = Math.min(minX, rox); maxX = Math.max(maxX, rox + rw);
+        minY = Math.min(minY, roy); maxY = Math.max(maxY, roy + rh);
+      }
+
+      if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+        return { x: 0, y: 0, width: VB_W, height: VB_H };
+      }
+
+      const pad = 40;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(VB_W, maxX + pad);
+      maxY = Math.min(VB_H, maxY + pad);
+
+      const width = Math.max(100, maxX - minX);
+      const height = Math.max(100, maxY - minY);
+      return { x: minX, y: minY, width, height };
     }
 
     function updateA4Scale(val) {
@@ -945,20 +998,12 @@
         clickArea.addEventListener('mouseleave', hideTooltip);
         g.appendChild(clickArea);
 
-        if (device.status === 'broken') {
-          const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          glow.setAttribute('r', size + 10);
-          glow.setAttribute('fill', statusColors.broken);
-          glow.setAttribute('opacity', '0.25');
-          glow.setAttribute('filter', 'url(#glow)');
-          g.appendChild(glow);
-        }
-
+        // ไม่ใช้สีตามสถานะแล้ว แสดงเป็นวงกลมพื้นขาวกลาง ๆ เหมือนกันทุกจุด เน้นที่ไอคอนแทน
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('r', size);
-        circle.setAttribute('fill', getMarkerColor(device.status));
-        circle.setAttribute('stroke', '#fff');
-        circle.setAttribute('stroke-width', '3');
+        circle.setAttribute('fill', '#ffffff');
+        circle.setAttribute('stroke', '#94a3b8');
+        circle.setAttribute('stroke-width', '2');
         circle.setAttribute('filter', 'url(#shadow)');
         g.appendChild(circle);
 
@@ -1342,8 +1387,14 @@
       showUploadStatus('⏳ กำลังสร้าง PDF...', 'info');
 
       const container = document.getElementById('mapContainer');
+      const svg = document.getElementById('floorplan');
       const originalOverflow = container.style.overflow;
       const originalMaxHeight = container.style.maxHeight;
+      const originalViewBox = svg.getAttribute('viewBox');
+
+      // ตัดพื้นที่ว่างส่วนเกินออก โดยซูมเข้าเฉพาะขอบเขตที่มีจุดอุปกรณ์/รูปแปลนจริง
+      const bbox = computeContentBBox();
+      svg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
 
       container.style.overflow = 'visible';
       container.style.maxHeight = 'none';
@@ -1351,6 +1402,14 @@
 
       const zoomControls = document.querySelector('.zoom-controls');
       if (zoomControls) zoomControls.style.display = 'none';
+
+      function restoreView() {
+        container.style.overflow = originalOverflow || 'auto';
+        container.style.maxHeight = originalMaxHeight || '72vh';
+        document.body.classList.remove('pdf-capture');
+        if (zoomControls) zoomControls.style.display = '';
+        svg.setAttribute('viewBox', originalViewBox);
+      }
 
       setTimeout(() => {
         html2canvas(container, {
@@ -1362,10 +1421,7 @@
           width: container.scrollWidth,
           height: container.scrollHeight,
         }).then(canvas => {
-          container.style.overflow = originalOverflow || 'auto';
-          container.style.maxHeight = originalMaxHeight || '72vh';
-          document.body.classList.remove('pdf-capture');
-          if (zoomControls) zoomControls.style.display = '';
+          restoreView();
 
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
           const { jsPDF } = window.jspdf;
@@ -1381,10 +1437,7 @@
           showUploadStatus('📄 ส่งออก PDF สำเร็จ!', 'success');
         }).catch(err => {
           console.error(err);
-          container.style.overflow = originalOverflow || 'auto';
-          container.style.maxHeight = originalMaxHeight || '72vh';
-          document.body.classList.remove('pdf-capture');
-          if (zoomControls) zoomControls.style.display = '';
+          restoreView();
           showUploadStatus('❌ สร้าง PDF ล้มเหลว', 'error');
         });
       }, 300);
